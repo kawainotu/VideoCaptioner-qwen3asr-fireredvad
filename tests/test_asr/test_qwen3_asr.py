@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -62,6 +63,39 @@ class TestQwenSegmentGrouping:
 
 
 class TestQwenRunnerHelpers:
+    def test_runner_drains_diagnostics_without_blocking_progress(self, tmp_path):
+        audio_path = tmp_path / "audio.wav"
+        audio_path.write_bytes(b"audio")
+        output_payload = '{"segments": [], "language": ""}'
+        runner_script = (
+            "import json, pathlib, sys;"
+            "sys.stderr.write('x' * 131072 + '\\n');"
+            "sys.stderr.flush();"
+            "print(json.dumps({'type': 'progress', 'progress': 42, "
+            "'message': 'Transcribed 1/1'}), flush=True);"
+            "pathlib.Path(sys.argv[1]).write_text(" + repr(output_payload) + ", "
+            "encoding='utf-8')"
+        )
+
+        asr = Qwen3ASR.__new__(Qwen3ASR)
+        asr.audio_input = str(audio_path)
+        asr.file_binary = None
+        asr.process = None
+        asr._validate_components = lambda: None
+        asr._build_command = lambda _audio, output: [
+            sys.executable,
+            "-c",
+            runner_script,
+            str(output),
+        ]
+        events = []
+
+        result = asr._run(callback=lambda value, message: events.append((value, message)))
+
+        assert result == {"segments": [], "language": ""}
+        assert (42, "Transcribed 1/1") in events
+        assert asr.process is None
+
     def test_transcription_uses_qwen_language_names(self):
         received_languages = []
 

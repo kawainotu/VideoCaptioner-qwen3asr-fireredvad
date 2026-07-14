@@ -194,40 +194,67 @@ class Qwen3ASR(BaseASR):
             self.process = subprocess.Popen(
                 command,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                # The runner emits model/runtime diagnostics on stderr while
+                # progress events are sent on stdout.  Keep both streams on
+                # one pipe so a full stderr pipe cannot pause inference.
+                stderr=subprocess.STDOUT,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                bufsize=1,
                 env=env,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             )
 
             error_message = ""
+            diagnostics: list[str] = []
             assert self.process.stdout is not None
-            for raw_line in self.process.stdout:
-                line = raw_line.strip()
-                if not line:
-                    continue
-                try:
-                    event = json.loads(line)
-                except json.JSONDecodeError:
-                    logger.debug("Qwen3-ASR runner: %s", line)
-                    continue
-                if event.get("type") == "progress":
-                    callback(int(event.get("progress", 0)), str(event.get("message", "")))
-                elif event.get("type") == "error":
-                    error_message = str(event.get("message", "Qwen3-ASR failed"))
+            process = self.process
+            try:
+                for raw_line in process.stdout:
+                    line = raw_line.strip()
+                    if not line:
+                        continue
+                    try:
+                        event = json.loads(line)
+                    except json.JSONDecodeError:
+                        diagnostics.append(line)
+                        # Keep a bounded diagnostic tail in case a runtime
+                        # exits without emitting its structured error event.
+                        del diagnostics[:-20]
+                        logger.debug("Qwen3-ASR runner: %s", line)
+                        continue
+                    if event.get("type") == "progress":
+                        callback(
+                            int(event.get("progress", 0)),
+                            str(event.get("message", "")),
+                        )
+                    elif event.get("type") == "error":
+                        error_message = str(event.get("message", "Qwen3-ASR failed"))
 
-            stderr = ""
-            if self.process.stderr is not None:
-                stderr = self.process.stderr.read().strip()
-            return_code = self.process.wait()
-            if return_code != 0:
-                raise RuntimeError(error_message or stderr or f"Qwen3-ASR exited with {return_code}")
-            if not output_path.is_file():
-                raise RuntimeError("Qwen3-ASR did not produce a result file")
-            callback(100, "Qwen3-ASR completed")
-            return json.loads(output_path.read_text(encoding="utf-8"))
+                return_code = process.wait()
+                if return_code != 0:
+                    diagnostic_text = "\n".join(diagnostics)
+                    raise RuntimeError(
+                        error_message
+                        or diagnostic_text
+                        or f"Qwen3-ASR exited with {return_code}"
+                    )
+                if not output_path.is_file():
+                    raise RuntimeError("Qwen3-ASR did not produce a result file")
+                callback(100, "Qwen3-ASR completed")
+                return json.loads(output_path.read_text(encoding="utf-8"))
+            finally:
+                # Ensure a cancelled/failed transcription cannot leave the
+                # model process alive and holding GPU memory.
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                self.process = None
 
     def _make_segments(self, resp_data: dict) -> list[ASRDataSeg]:
         word_segments = [

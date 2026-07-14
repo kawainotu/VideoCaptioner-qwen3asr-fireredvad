@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -56,6 +57,7 @@ from videocaptioner.ui.thread.transcript_thread import TranscriptThread
 from videocaptioner.ui.thread.video_info_thread import VideoInfoThread
 
 DEFAULT_THUMBNAIL_PATH = RESOURCE_PATH / "assets" / "default_thumbnail.jpg"
+START_BUTTON_MIN_WIDTH = 180
 
 
 class VideoInfoCard(CardWidget):
@@ -145,10 +147,22 @@ class VideoInfoCard(CardWidget):
 
         self.start_button.setDisabled(True)
 
-        button_widget = QWidget()
-        button_widget.setLayout(self.button_layout)
-        button_widget.setFixedWidth(130)
-        self.main_layout.addWidget(button_widget)  # type: ignore
+        self.button_widget = QWidget()
+        self.button_widget.setLayout(self.button_layout)
+        self.button_widget.setMinimumWidth(START_BUTTON_MIN_WIDTH)
+        self.button_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        self.main_layout.addWidget(self.button_widget)  # type: ignore
+
+    def set_status_text(self, text: str) -> None:
+        """Show the complete progress message without clipping the button."""
+        self.start_button.setText(text)
+        self.start_button.setToolTip(text)
+        button_margins = self.button_layout.contentsMargins()
+        required_width = self.start_button.sizeHint().width()
+        required_width += button_margins.left() + button_margins.right()
+        self.button_widget.setMinimumWidth(
+            max(START_BUTTON_MIN_WIDTH, required_width)
+        )
 
     def update_info(self, video_info: VideoInfo) -> None:
         """更新视频信息显示"""
@@ -303,14 +317,14 @@ class VideoInfoCard(CardWidget):
 
     def on_transcript_progress(self, value, message):
         """更新转录进度"""
-        self.start_button.setText(message)
+        self.set_status_text(message)
         self.progress_ring.setValue(value)
 
     def on_transcript_error(self, error):
         """处理转录错误"""
         self.transcription_interface.is_processing = False  # type: ignore
         self.start_button.setEnabled(True)
-        self.start_button.setText(self.tr("重新转录"))
+        self.set_status_text(self.tr("重新转录"))
         self.progress_ring.hide()
         InfoBar.error(
             self.tr("转录失败"),
@@ -322,14 +336,14 @@ class VideoInfoCard(CardWidget):
     def on_transcript_finished(self, task):
         """转录完成处理"""
         self.start_button.setEnabled(True)
-        self.start_button.setText(self.tr("转录完成"))
+        self.set_status_text(self.tr("转录完成"))
         self.progress_ring.hide()
         self.finished.emit(task)
 
     def reset_ui(self):
         """重置UI状态"""
         self.start_button.setDisabled(False)
-        self.start_button.setText(self.tr("开始转录"))
+        self.set_status_text(self.tr("开始转录"))
         self.progress_ring.setValue(0)
         self.progress_ring.hide()
 

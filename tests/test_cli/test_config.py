@@ -131,6 +131,7 @@ class TestBuildConfig:
 
     def test_qwen3_asr_defaults(self):
         config = build_config(config_path=None)
+        assert config["transcribe"]["qwen3_asr"]["model"] == "qwen3-asr-1.7b"
         assert config["transcribe"]["qwen3_asr"]["device"] == "auto"
         assert config["transcribe"]["qwen3_asr"]["low_memory"] is True
 

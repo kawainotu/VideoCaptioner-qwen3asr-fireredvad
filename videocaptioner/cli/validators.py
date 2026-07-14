@@ -138,14 +138,14 @@ def validate_faster_whisper() -> bool:
     return True
 
 
-def validate_qwen3_asr() -> bool:
+def validate_qwen3_asr(asr_model_dir=None) -> bool:
     """Check that the Windows Qwen3-ASR runtime and both models are available."""
     if os.name != "nt":
         output.error("Qwen3-ASR is currently supported on Windows only")
         return False
     from videocaptioner.core.asr.qwen3_runtime import missing_components
 
-    missing = missing_components()
+    missing = missing_components(asr_model_dir=asr_model_dir)
     if missing:
         output.error("Qwen3-ASR is not ready: " + ", ".join(missing))
         output.hint("Install it from the GUI: select Qwen3-ASR > Manage components.")
@@ -182,7 +182,10 @@ def validate_transcribe(config: dict) -> bool:
     if asr == "faster-whisper":
         return validate_faster_whisper()
     if asr == "qwen3-asr":
-        return validate_qwen3_asr()
+        from videocaptioner.core.asr.qwen3_models import get_qwen3_asr_model
+
+        model = get_qwen3_asr_model(get(config, "transcribe.qwen3_asr.model", ""))
+        return validate_qwen3_asr(model.path)
     if asr == "whisper-cpp":
         return validate_whisper_cpp()
     # bijian/jianying: no config needed (public endpoints)

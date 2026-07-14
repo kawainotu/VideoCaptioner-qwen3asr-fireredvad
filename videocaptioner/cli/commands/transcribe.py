@@ -68,6 +68,7 @@ def run(args: Namespace, config: dict) -> int:
             os.environ["OPENAI_BASE_URL"] = whisper_base
 
     # Build TranscribeConfig
+    from videocaptioner.core.asr.qwen3_models import get_qwen3_asr_model
     from videocaptioner.core.entities import (
         FasterWhisperModelEnum,
         TranscribeConfig,
@@ -97,6 +98,8 @@ def run(args: Namespace, config: dict) -> int:
     wcpp_model_str = get(config, "transcribe.whisper_cpp.model", "large-v2")
     wcpp_model_enum = next((m for m in WhisperModelEnum if m.value == wcpp_model_str), None)
 
+    qwen_model = get_qwen3_asr_model(get(config, "transcribe.qwen3_asr.model", ""))
+
     transcribe_config = TranscribeConfig(
         transcribe_model=asr_map.get(asr_engine),
         transcribe_language=language if language != "auto" else "",
@@ -112,6 +115,7 @@ def run(args: Namespace, config: dict) -> int:
         faster_whisper_one_word=True,
         faster_whisper_prompt=get(config, "transcribe.faster_whisper.prompt", ""),
         # Qwen3-ASR options
+        qwen_asr_model_dir=str(qwen_model.path),
         qwen_asr_device=get(config, "transcribe.qwen3_asr.device", "auto"),
         qwen_asr_low_memory=get(config, "transcribe.qwen3_asr.low_memory", True),
         qwen_asr_vad_filter=get(config, "transcribe.qwen3_asr.vad_filter", True),

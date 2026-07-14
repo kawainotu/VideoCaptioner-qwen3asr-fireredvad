@@ -5,8 +5,8 @@ from typing import Optional
 from videocaptioner.config import (
     MODEL_PATH,
     QWEN3_ALIGNER_MODEL_PATH,
-    QWEN3_ASR_MODEL_PATH,
 )
+from videocaptioner.core.asr.qwen3_models import get_qwen3_asr_model
 from videocaptioner.core.asr.qwen3_runtime import runtime_python_path
 from videocaptioner.core.entities import (
     LANGUAGES,
@@ -100,7 +100,7 @@ class TaskFactory:
             faster_whisper_prompt=cfg.faster_whisper_prompt.value,
             # Qwen3-ASR configuration
             qwen_asr_runtime_python=str(runtime_python_path()),
-            qwen_asr_model_dir=str(QWEN3_ASR_MODEL_PATH),
+            qwen_asr_model_dir=str(get_qwen3_asr_model(cfg.qwen_asr_model.value).path),
             qwen_asr_aligner_model_dir=str(QWEN3_ALIGNER_MODEL_PATH),
             qwen_asr_device=cfg.qwen_asr_device.value,
             qwen_asr_low_memory=cfg.qwen_asr_low_memory.value,

@@ -12,6 +12,10 @@ from videocaptioner.core.asr.qwen3_asr_runner import (
     normalize_language,
     transcribe_chunks,
 )
+from videocaptioner.core.asr.qwen3_models import (
+    DEFAULT_QWEN3_ASR_MODEL_KEY,
+    get_qwen3_asr_model,
+)
 from videocaptioner.core.asr.qwen3_runtime import (
     is_model_ready,
     is_runtime_ready,
@@ -164,3 +168,20 @@ class TestQwenRuntimeChecks:
 
         (model_dir / "model.safetensors").write_bytes(b"weights")
         assert is_model_ready(model_dir)
+
+
+class TestQwenModelVariants:
+    def test_uses_the_official_model_when_selection_is_missing(self):
+        model = get_qwen3_asr_model(None)
+
+        assert model.key == DEFAULT_QWEN3_ASR_MODEL_KEY
+        assert model.model_id == "Qwen/Qwen3-ASR-1.7B"
+        assert model.path.name == "Qwen3-ASR-1.7B"
+
+    def test_resolves_the_japanese_anime_galgame_variant(self):
+        model = get_qwen3_asr_model("qwen3-asr-1.7b-ja-anime-galgame")
+
+        assert model.model_id == "jaykwok/Qwen3-ASR-1.7B-JA-Anime-Galgame"
+        assert model.source == "huggingface"
+        assert model.path.name == "Qwen3-ASR-1.7B-JA-Anime-Galgame"
+        assert "optimizer.pt" in model.ignore_patterns

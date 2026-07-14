@@ -19,6 +19,10 @@ from qfluentwidgets import (
 )
 
 from videocaptioner.config import SETTINGS_PATH, WORK_PATH
+from videocaptioner.core.asr.qwen3_models import (
+    DEFAULT_QWEN3_ASR_MODEL_KEY,
+    QWEN3_ASR_MODELS,
+)
 from videocaptioner.core.entities import (
     FasterWhisperModelEnum,
     LLMServiceEnum,
@@ -215,6 +219,12 @@ class Config(QConfig):
     faster_whisper_prompt = ConfigItem("FasterWhisper", "Prompt", "")
 
     # ------------------- Qwen3 ASR -------------------
+    qwen_asr_model = OptionsConfigItem(
+        "QwenASR",
+        "Model",
+        DEFAULT_QWEN3_ASR_MODEL_KEY,
+        OptionsValidator([model.key for model in QWEN3_ASR_MODELS]),
+    )
     qwen_asr_device = OptionsConfigItem(
         "QwenASR", "Device", "auto", OptionsValidator(["auto", "cuda", "cpu"])
     )

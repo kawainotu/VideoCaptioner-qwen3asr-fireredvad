@@ -89,6 +89,7 @@ DEFAULTS: Dict[str, Any] = {
             "model": "large-v2",
         },
         "qwen3_asr": {
+            "model": "qwen3-asr-1.7b",
             "device": "auto",
             "low_memory": True,
             "vad_filter": True,

@@ -11,6 +11,7 @@ from qfluentwidgets import (
     InfoBarPosition,
     MessageBoxBase,
     ProgressBar,
+    SegmentedWidget,
     SettingCard,
     SettingCardGroup,
     SingleDirectionScrollArea,
@@ -22,6 +23,11 @@ from qfluentwidgets import (
 from qfluentwidgets import FluentIcon as FIF
 
 from videocaptioner.config import QWEN3_ALIGNER_MODEL_PATH, QWEN3_ASR_MODEL_PATH
+from videocaptioner.core.asr.qwen3_models import (
+    QWEN3_ASR_MODELS,
+    Qwen3ASRModel,
+    get_qwen3_asr_model,
+)
 from videocaptioner.core.asr.qwen3_runtime import (
     is_model_ready,
     is_runtime_ready,
@@ -35,29 +41,39 @@ from videocaptioner.ui.components.SpinBoxSettingCard import (
     DoubleSpinBoxSettingCard,
     SpinBoxSettingCard,
 )
+from videocaptioner.ui.thread.huggingface_download_thread import HuggingFaceDownloadThread
 from videocaptioner.ui.thread.modelscope_download_thread import ModelscopeDownloadThread
 from videocaptioner.ui.thread.qwen_runtime_install_thread import QwenRuntimeInstallThread
 
-QWEN_COMPONENTS = (
-    {
-        "name": "Qwen3-ASR runtime",
-        "size": "Python + PyTorch",
-        "model_id": None,
-        "path": None,
-    },
-    {
-        "name": "Qwen3-ASR-1.7B",
-        "size": "4.7 GB",
-        "model_id": "Qwen/Qwen3-ASR-1.7B",
-        "path": QWEN3_ASR_MODEL_PATH,
-    },
-    {
-        "name": "Qwen3-ForcedAligner-0.6B",
-        "size": "1.84 GB",
-        "model_id": "Qwen/Qwen3-ForcedAligner-0.6B",
-        "path": QWEN3_ALIGNER_MODEL_PATH,
-    },
-)
+
+def qwen_components(asr_model: Qwen3ASRModel) -> tuple[dict, ...]:
+    """Build the component list for the selected ASR checkpoint."""
+    return (
+        {
+            "name": "Qwen3-ASR runtime",
+            "size": "Python + PyTorch",
+            "model_id": None,
+            "path": None,
+            "source": None,
+            "ignore_patterns": (),
+        },
+        {
+            "name": asr_model.model_id,
+            "size": asr_model.size,
+            "model_id": asr_model.model_id,
+            "path": asr_model.path,
+            "source": asr_model.source,
+            "ignore_patterns": asr_model.ignore_patterns,
+        },
+        {
+            "name": "Qwen3-ForcedAligner-0.6B",
+            "size": "1.84 GB",
+            "model_id": "Qwen/Qwen3-ForcedAligner-0.6B",
+            "path": QWEN3_ALIGNER_MODEL_PATH,
+            "source": "modelscope",
+            "ignore_patterns": (),
+        },
+    )
 
 QWEN_TIMESTAMP_LANGUAGES = (
     TranscribeLanguageEnum.AUTO,
@@ -76,9 +92,11 @@ QWEN_TIMESTAMP_LANGUAGES = (
 
 
 class Qwen3ASRManagerDialog(MessageBoxBase):
-    def __init__(self, parent=None, setting_widget=None):
+    def __init__(self, asr_model: Qwen3ASRModel, parent=None, setting_widget=None):
         super().__init__(parent)
         self.widget.setMinimumWidth(680)
+        self.asr_model = asr_model
+        self.components = qwen_components(asr_model)
         self.setting_widget = setting_widget
         self.active_thread = None
         self.operation_failed = False
@@ -100,6 +118,18 @@ class Qwen3ASRManagerDialog(MessageBoxBase):
                 self.tr("时间戳功能需要同时安装识别模型和强制对齐模型"), self
             )
         )
+
+        model_selector_row = QHBoxLayout()
+        model_selector_row.addWidget(BodyLabel(self.tr("Qwen3 系列模型"), self))
+        model_selector_row.addStretch()
+        self.model_selector = SegmentedWidget(self)
+        self.model_selector.setMinimumWidth(360)
+        for model in QWEN3_ASR_MODELS:
+            self.model_selector.addItem(model.key, self.tr(model.label))
+        self.model_selector.setCurrentItem(self.asr_model.key)
+        self.model_selector.currentItemChanged.connect(self._on_model_changed)
+        model_selector_row.addWidget(self.model_selector)
+        layout.addLayout(model_selector_row)
 
         self.table = TableWidget(self)
         self.table.setEditTriggers(TableWidget.NoEditTriggers)
@@ -136,14 +166,24 @@ class Qwen3ASRManagerDialog(MessageBoxBase):
         self._refresh_table()
 
     def _component_ready(self, row: int) -> bool:
-        component = QWEN_COMPONENTS[row]
+        component = self.components[row]
         if component["path"] is None:
             return is_runtime_ready()
         return is_model_ready(component["path"])
 
+    def _on_model_changed(self, key: str) -> None:
+        model = get_qwen3_asr_model(key)
+        if model.key == self.asr_model.key:
+            return
+        self.asr_model = model
+        self.components = qwen_components(model)
+        if cfg.qwen_asr_model.value != model.key:
+            cfg.set(cfg.qwen_asr_model, model.key)
+        self._refresh_table()
+
     def _refresh_table(self) -> None:
-        self.table.setRowCount(len(QWEN_COMPONENTS))
-        for row, component in enumerate(QWEN_COMPONENTS):
+        self.table.setRowCount(len(self.components))
+        for row, component in enumerate(self.components):
             ready = self._component_ready(row)
             name_item = QTableWidgetItem(component["name"])
             size_item = QTableWidgetItem(component["size"])
@@ -185,10 +225,16 @@ class Qwen3ASRManagerDialog(MessageBoxBase):
         if self.active_thread is not None:
             return
         self.operation_failed = False
-        component = QWEN_COMPONENTS[row]
+        component = self.components[row]
         self._set_busy(True, self.tr("正在准备安装"))
         if component["path"] is None:
             thread = QwenRuntimeInstallThread()
+        elif component["source"] == "huggingface":
+            thread = HuggingFaceDownloadThread(
+                component["model_id"],
+                str(component["path"]),
+                component["ignore_patterns"],
+            )
         else:
             thread = ModelscopeDownloadThread(component["model_id"], str(component["path"]))
         self.active_thread = thread
@@ -240,7 +286,8 @@ class Qwen3ASRSettingWidget(QWidget):
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
-        if not self._missing_prompted and missing_components():
+        asr_model = get_qwen3_asr_model(cfg.qwen_asr_model.value)
+        if not self._missing_prompted and missing_components(asr_model_dir=asr_model.path):
             self._missing_prompted = True
             InfoBar.warning(
                 self.tr("Qwen3-ASR 尚未就绪"),
@@ -265,6 +312,20 @@ class Qwen3ASRSettingWidget(QWidget):
             self.tr("Qwen3-ASR-1.7B + Qwen3-ForcedAligner-0.6B"),
             self.model_group,
         )
+        self.model_selector_card = SettingCard(
+            FIF.ROBOT,
+            self.tr("Qwen3 系列模型"),
+            self.tr("选择用于语音识别的模型"),
+            self.model_group,
+        )
+        self.model_selector = SegmentedWidget(self.model_selector_card)
+        self.model_selector_card.hBoxLayout.addWidget(
+            self.model_selector, 0, Qt.AlignRight  # type: ignore[arg-type]
+        )
+        self.model_selector_card.hBoxLayout.addSpacing(16)
+        for model in QWEN3_ASR_MODELS:
+            self.model_selector.addItem(model.key, self.tr(model.label))
+        self._set_qwen_model(cfg.qwen_asr_model.value)
         self.manage_card = HyperlinkCard(
             "",
             self.tr("管理组件"),
@@ -371,7 +432,14 @@ class Qwen3ASRSettingWidget(QWidget):
             self.other_group,
         )
 
-        for card in (self.model_card, self.manage_card, self.device_card, self.low_memory_card, self.language_card):
+        for card in (
+            self.model_card,
+            self.model_selector_card,
+            self.manage_card,
+            self.device_card,
+            self.low_memory_card,
+            self.language_card,
+        ):
             self.model_group.addSettingCard(card)
         for card in (
             self.vad_filter_card,
@@ -389,6 +457,7 @@ class Qwen3ASRSettingWidget(QWidget):
         self.container_layout.addWidget(self.other_group)
         self.container_layout.addStretch(1)
         self.device_card.comboBox.setMinimumWidth(200)
+        self.model_selector.setMinimumWidth(360)
         self.language_card.comboBox.setMinimumWidth(200)
         self.prompt_card.lineEdit.setMinimumWidth(200)
         self.scroll_area.setWidget(self.container)
@@ -397,6 +466,8 @@ class Qwen3ASRSettingWidget(QWidget):
 
     def _connect_signals(self) -> None:
         self.manage_card.linkButton.clicked.connect(self._show_manager)
+        self.model_selector.currentItemChanged.connect(self._on_qwen_model_changed)
+        cfg.qwen_asr_model.valueChanged.connect(self._on_qwen_model_config_changed)
         self.language_card.comboBox.currentIndexChanged.connect(self._on_qwen_language_changed)
         cfg.transcribe_language.valueChanged.connect(self._set_qwen_language)
         self.vad_filter_card.checkedChanged.connect(self._on_vad_filter_changed)
@@ -406,6 +477,20 @@ class Qwen3ASRSettingWidget(QWidget):
         language = self.language_card.comboBox.itemData(index)
         if language in self._qwen_languages and language != cfg.transcribe_language.value:
             cfg.set(cfg.transcribe_language, language)
+
+    def _on_qwen_model_changed(self, key: str) -> None:
+        if key != cfg.qwen_asr_model.value:
+            cfg.set(cfg.qwen_asr_model, key)
+
+    def _on_qwen_model_config_changed(self, key: str) -> None:
+        self._set_qwen_model(key)
+        self.refresh_status()
+
+    def _set_qwen_model(self, key: str) -> None:
+        model = get_qwen3_asr_model(key)
+        if self.model_selector.currentRouteKey() != model.key:
+            self.model_selector.setCurrentItem(model.key)
+        self.model_selector_card.setContent(self.tr(model.description))
 
     def _set_qwen_language(self, language: TranscribeLanguageEnum) -> None:
         if language not in self._qwen_languages:
@@ -424,13 +509,17 @@ class Qwen3ASRSettingWidget(QWidget):
             card.setEnabled(checked)
 
     def _show_manager(self) -> None:
-        Qwen3ASRManagerDialog(self.window(), self).exec_()
+        model = get_qwen3_asr_model(cfg.qwen_asr_model.value)
+        Qwen3ASRManagerDialog(model, self.window(), self).exec_()
 
     def refresh_status(self) -> None:
-        missing = missing_components()
+        model = get_qwen3_asr_model(cfg.qwen_asr_model.value)
+        missing = missing_components(asr_model_dir=model.path)
         if missing:
-            self.model_card.setContent(self.tr("缺少：") + ", ".join(missing))
+            self.model_card.setContent(
+                f"{model.label}；{self.tr('缺少：')}{', '.join(missing)}"
+            )
         else:
             self.model_card.setContent(
-                self.tr("Qwen3-ASR-1.7B + Qwen3-ForcedAligner-0.6B（已就绪）")
+                f"{model.label} + Qwen3-ForcedAligner-0.6B{self.tr('（已就绪）')}"
             )

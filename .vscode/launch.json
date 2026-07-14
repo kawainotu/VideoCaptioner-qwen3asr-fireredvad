@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "VideoCaptioner: debug GUI",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "videocaptioner.ui.main",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "subProcess": true,
+            "preLaunchTask": "VideoCaptioner: prepare debug environment",
+            "env": {
+                "VIDEOCAPTIONER_DEBUG": "1",
+                "PYTHONFAULTHANDLER": "1",
+                "PYTHONUNBUFFERED": "1"
+            }
+        }
+    ]
+}

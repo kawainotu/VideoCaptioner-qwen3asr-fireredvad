@@ -29,7 +29,10 @@ def main():
     plugin_path = os.path.join(
         sys.prefix, lib_folder, "site-packages", "PyQt5", "Qt5", "plugins"
     )
-    os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = plugin_path
+    # PyInstaller sets this for frozen applications.  Only replace it when
+    # running from a standard Python environment where this path exists.
+    if os.path.isdir(plugin_path):
+        os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = plugin_path
 
     # Logger + global exception hook
     logger = setup_logger("VideoCaptioner")

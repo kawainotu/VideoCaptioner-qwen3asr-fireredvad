@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from pathlib import Path
 
 try:
@@ -22,7 +23,7 @@ _PACKAGE_DIR = Path(__file__).parent
 _PROJECT_ROOT = _PACKAGE_DIR.parent
 
 # Development mode: resource/ exists next to the package
-_IS_DEV = (_PROJECT_ROOT / "resource").is_dir()
+_IS_DEV = (_PROJECT_ROOT / "resource").is_dir() and not getattr(sys, "frozen", False)
 
 if _IS_DEV:
     ROOT_PATH = _PROJECT_ROOT
@@ -33,9 +34,13 @@ else:
     # Installed via pip — use platform-appropriate directories
     from platformdirs import user_data_dir
 
-    ROOT_PATH = Path(user_data_dir(APP_NAME))
-    RESOURCE_PATH = ROOT_PATH / "resource"
-    APPDATA_PATH = ROOT_PATH
+    APPDATA_PATH = Path(user_data_dir(APP_NAME))
+    if getattr(sys, "frozen", False):
+        ROOT_PATH = Path(getattr(sys, "_MEIPASS", _PROJECT_ROOT))
+        RESOURCE_PATH = ROOT_PATH / "resource"
+    else:
+        ROOT_PATH = APPDATA_PATH
+        RESOURCE_PATH = ROOT_PATH / "resource"
     WORK_PATH = Path.home() / "VideoCaptioner"
 
 BIN_PATH = RESOURCE_PATH / "bin"

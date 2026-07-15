@@ -372,7 +372,7 @@ class Qwen3ASRSettingWidget(QWidget):
         self.model_card = SettingCard(
             FIF.ROBOT,
             self.tr("模型"),
-            self.tr("Qwen3-ASR-1.7B + Qwen3-ForcedAligner-0.6B"),
+            self.tr("选择识别模型并安装 Qwen3-ForcedAligner-0.6B"),
             self.model_group,
         )
         self.model_selector_card = SettingCard(

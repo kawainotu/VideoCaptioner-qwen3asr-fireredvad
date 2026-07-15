@@ -48,7 +48,7 @@ videocaptioner transcribe <文件> [选项]
 
 | 选项 | 说明 |
 |------|------|
-| `--asr` | ASR 引擎：`bijian`(默认,免费) `jianying`(免费) `whisper-api` `whisper-cpp`。bijian/jianying 仅支持中英文，其他语言用 whisper-api 或 whisper-cpp |
+| `--asr` | ASR 引擎：`bijian`(默认,免费) `jianying`(免费) `whisper-api` `whisper-cpp` `qwen3-asr`。bijian/jianying 仅支持中英文；Qwen3-ASR 需要先在 GUI 中安装组件 |
 | `--language CODE` | 源语言 ISO 639-1 代码，如 `zh` `en` `ja`，或 `auto`（默认） |
 | `--word-timestamps` | 输出词级时间戳（配合字幕断句使用） |
 | `--whisper-api-key` | Whisper API 密钥（仅 `--asr whisper-api`） |
@@ -56,6 +56,14 @@ videocaptioner transcribe <文件> [选项]
 | `--whisper-model` | Whisper 模型名（whisper-api 默认 whisper-1，whisper-cpp 默认 large-v2） |
 | `-o PATH` | 输出文件或目录路径 |
 | `--format` | 输出格式：`srt`(默认) `ass` `txt` `json` |
+
+使用官方轻量 `Qwen3-ASR-0.6B`：
+
+```bash
+# 首次使用前，在 GUI 的 Qwen3-ASR 设置页下载运行环境、0.6B 模型和时间戳模型
+videocaptioner config set transcribe.qwen3_asr.model qwen3-asr-0.6b
+videocaptioner transcribe video.mp4 --asr qwen3-asr
+```
 
 ---
 

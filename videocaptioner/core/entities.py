@@ -2,6 +2,7 @@ import datetime
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Optional
 
 from .qwen3_vad_defaults import FIRERED_VAD_DEFAULTS
@@ -638,7 +639,12 @@ class TranscribeConfig:
             lines.append(f"One Word Per Segment: {self.faster_whisper_one_word}")
 
         elif self.transcribe_model == TranscribeModelEnum.QWEN3_ASR:
-            lines.append("Model: Qwen3-ASR-1.7B")
+            model_name = (
+                Path(self.qwen_asr_model_dir).name
+                if self.qwen_asr_model_dir
+                else "Qwen3-ASR-1.7B"
+            )
+            lines.append(f"Model: {model_name}")
             lines.append("Aligner: Qwen3-ForcedAligner-0.6B")
             lines.append(f"Device: {self.qwen_asr_device}")
             lines.append(f"Low Memory: {self.qwen_asr_low_memory}")

@@ -23,6 +23,7 @@ from videocaptioner.core.asr.qwen3_runtime import (
     is_model_ready,
     is_runtime_ready,
     is_supported_runtime_python_version,
+    missing_components,
     write_runtime_marker,
 )
 from videocaptioner.core.asr.qwen3_vad_models import (
@@ -231,6 +232,16 @@ class TestQwenRuntimeChecks:
         (model_dir / "model.safetensors").write_bytes(b"weights")
         assert is_model_ready(model_dir)
 
+    def test_missing_components_names_the_selected_asr_model(self, tmp_path):
+        missing = missing_components(
+            runtime_dir=tmp_path / "runtime",
+            asr_model_dir=tmp_path / "Qwen3-ASR-0.6B",
+            aligner_model_dir=tmp_path / "aligner",
+        )
+
+        assert "Qwen3-ASR-0.6B" in missing
+        assert "Qwen3-ASR-1.7B" not in missing
+
     def test_firered_model_ready_requires_cmvn_and_weights(self, tmp_path):
         model_dir = Path(tmp_path) / "FireRedVAD" / "VAD"
         model_dir.mkdir(parents=True)
@@ -256,6 +267,14 @@ class TestQwenModelVariants:
         assert model.source == "huggingface"
         assert model.path.name == "Qwen3-ASR-1.7B-JA-Anime-Galgame"
         assert "optimizer.pt" in model.ignore_patterns
+
+    def test_resolves_the_official_0_6b_variant(self):
+        model = get_qwen3_asr_model("qwen3-asr-0.6b")
+
+        assert model.model_id == "Qwen/Qwen3-ASR-0.6B"
+        assert model.source == "modelscope"
+        assert model.path.name == "Qwen3-ASR-0.6B"
+        assert model.size == "1.88 GB"
 
     def test_resolves_firered_vad_choice(self):
         model = get_qwen3_vad_model(FIRERED_VAD_MODEL_KEY)

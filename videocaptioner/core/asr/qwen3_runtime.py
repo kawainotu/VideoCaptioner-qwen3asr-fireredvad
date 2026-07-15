@@ -81,11 +81,13 @@ def missing_components(
     vad_model_dir: Optional[Path] = None,
 ) -> list[str]:
     missing = []
+    asr_model_path = Path(asr_model_dir or QWEN3_ASR_MODEL_PATH)
+    aligner_model_path = Path(aligner_model_dir or QWEN3_ALIGNER_MODEL_PATH)
     if not is_runtime_ready(runtime_dir):
         missing.append("Qwen3-ASR runtime")
-    if not is_model_ready(asr_model_dir or QWEN3_ASR_MODEL_PATH):
-        missing.append("Qwen3-ASR-1.7B")
-    if not is_model_ready(aligner_model_dir or QWEN3_ALIGNER_MODEL_PATH):
+    if not is_model_ready(asr_model_path):
+        missing.append(asr_model_path.name)
+    if not is_model_ready(aligner_model_path):
         missing.append("Qwen3-ForcedAligner-0.6B")
     vad_model = get_qwen3_vad_model(vad_model_key)
     if (

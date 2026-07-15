@@ -4,7 +4,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from videocaptioner.config import MODEL_PATH, QWEN3_ASR_MODEL_PATH
+from videocaptioner.config import (
+    MODEL_PATH,
+    QWEN3_ASR_0_6B_MODEL_PATH,
+    QWEN3_ASR_MODEL_PATH,
+)
 
 DownloadSource = Literal["modelscope", "huggingface"]
 
@@ -34,6 +38,15 @@ QWEN3_ASR_MODELS = (
         source="modelscope",
         path=QWEN3_ASR_MODEL_PATH,
         size="4.7 GB",
+    ),
+    Qwen3ASRModel(
+        key="qwen3-asr-0.6b",
+        label="通用 0.6B",
+        description="官方轻量语音识别模型，兼顾识别准确率与速度",
+        model_id="Qwen/Qwen3-ASR-0.6B",
+        source="modelscope",
+        path=QWEN3_ASR_0_6B_MODEL_PATH,
+        size="1.88 GB",
     ),
     Qwen3ASRModel(
         key="qwen3-asr-1.7b-ja-anime-galgame",

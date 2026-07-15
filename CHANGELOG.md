@@ -6,6 +6,7 @@
 
 - 支持在 Windows 本地使用 Qwen3-ASR 转录视频和音频。
 - 新增 Qwen3-ASR 模型、时间戳对齐模型和独立运行环境的组件管理与下载流程。
+- 新增官方 `Qwen3-ASR-0.6B` 轻量模型，可在组件管理中选择并下载。
 - 新增 FireRedVAD，可在 Qwen3-ASR 设置中与 Silero VAD 切换。
 - Windows 安装包内置 FireRedVAD 离线权重，并包含 Qwen3-ASR 运行程序。
 
@@ -20,4 +21,4 @@
 ### 使用提示
 
 - 此安装包面向 Windows x64。
-- 首次使用 Qwen3-ASR 前，请在“管理组件”下载所需模型。模型文件约 6.5 GB。
+- 首次使用 Qwen3-ASR 前，请在“管理组件”下载所需模型。`0.6B` 与时间戳模型合计约 3.7 GB，`1.7B` 组合约 6.5 GB。

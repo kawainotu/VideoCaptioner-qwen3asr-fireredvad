@@ -106,6 +106,8 @@ curl -fsSL https://raw.githubusercontent.com/WEIFENG2333/VideoCaptioner/master/s
 
 在转录模型中选择 `Qwen3-ASR`，然后打开“管理组件”安装独立运行环境、识别模型与 `Qwen3-ForcedAligner-0.6B`。可在“Qwen3 系列模型”中选择官方 `Qwen3-ASR-0.6B`（约 1.88 GB）或 `Qwen3-ASR-1.7B`；前者与时间戳模型合计约 3.7 GB，适合更关注显存和下载体积的场景。
 
+Qwen3-ASR 的 Python、PyTorch、Silero VAD、FireRedVAD 运行环境以及时间戳模型由所有 Qwen3-ASR 识别模型共用，只需安装一次；切换 0.6B、1.7B 或微调模型时不会重复下载 PyTorch。安装器默认使用阿里云 PyPI/PyTorch 镜像，Hugging Face 模型默认使用 `hf-mirror.com`，镜像失败时会自动回退官方源。可通过 `VIDEOCAPTIONER_PYPI_INDEX`、`VIDEOCAPTIONER_PYTORCH_MIRROR` 和 `VIDEOCAPTIONER_HF_ENDPOINT` 覆盖下载源。
+
 默认开启低显存模式，识别与时间戳对齐会分阶段加载模型，适合 8 GB 显存设备。Qwen3-ASR 设置页提供 CUDA/CPU/自动设备选择、Silero VAD / FireRedVAD 切换、对应的阈值与切分参数，以及上下文提示。发布安装包会内置 FireRedVAD 离线权重，也可在“管理组件”中更新。
 
 CLI 使用示例：

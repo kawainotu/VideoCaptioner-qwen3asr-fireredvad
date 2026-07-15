@@ -59,8 +59,8 @@ def qwen_components(
     """Build the component list for the selected ASR checkpoint."""
     components = [
         {
-            "name": "Qwen3-ASR runtime",
-            "size": "Python + PyTorch",
+            "name": "Qwen3-ASR 共享运行环境",
+            "size": "所有模型共用",
             "kind": "runtime",
             "model_id": None,
             "path": None,

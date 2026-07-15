@@ -17,6 +17,12 @@ from videocaptioner.core.asr.qwen3_runtime import (
 )
 
 _SUPPORTED_PYTHON_TEXT = "Python 3.10, 3.11, or 3.12"
+_PYPI_MIRROR_INDEX = "https://mirrors.aliyun.com/pypi/simple"
+_PYPI_OFFICIAL_INDEX = "https://pypi.org/simple"
+_PYTORCH_MIRROR_LINKS = "https://mirrors.aliyun.com/pytorch-wheels/cu128/"
+_PYTORCH_OFFICIAL_INDEX = "https://download.pytorch.org/whl/cu128"
+_TORCH_PACKAGE = "torch==2.11.0+cu128"
+_TORCHAUDIO_PACKAGE = "torchaudio==2.11.0+cu128"
 
 
 class QwenRuntimeInstallThread(QThread):
@@ -57,6 +63,29 @@ class QwenRuntimeInstallThread(QThread):
         if return_code != 0:
             raise RuntimeError(last_line or f"Command failed with exit code {return_code}")
         self.progress.emit(end, label)
+
+    def _run_command_with_fallback(
+        self,
+        primary_command: list[str],
+        fallback_command: list[str],
+        start: int,
+        end: int,
+        label: str,
+    ) -> None:
+        """Use the configured domestic mirror first, then retry via the official source."""
+        try:
+            self._run_command(primary_command, start, end, label)
+        except RuntimeError as primary_error:
+            if self._stopped or primary_command == fallback_command:
+                raise
+            fallback_label = self.tr("国内镜像不可用，正在切换官方源")
+            self.progress.emit(start, fallback_label)
+            try:
+                self._run_command(fallback_command, start, end, label)
+            except RuntimeError as fallback_error:
+                raise RuntimeError(
+                    f"{fallback_error} (domestic mirror also failed: {primary_error})"
+                ) from fallback_error
 
     @staticmethod
     def _python_version(python: str) -> tuple[int, int] | None:
@@ -184,28 +213,65 @@ class QwenRuntimeInstallThread(QThread):
         try:
             self.runtime_dir.parent.mkdir(parents=True, exist_ok=True)
             python = self._ensure_runtime_python()
-            self._run_command(
-                [python, "-m", "pip", "install", "--upgrade", "pip", "wheel"],
-                10,
-                20,
-                self.tr("正在更新安装工具"),
+            pypi_index = os.environ.get("VIDEOCAPTIONER_PYPI_INDEX", _PYPI_MIRROR_INDEX)
+            pytorch_mirror = os.environ.get(
+                "VIDEOCAPTIONER_PYTORCH_MIRROR", _PYTORCH_MIRROR_LINKS
             )
-            self._run_command(
+            self._run_command_with_fallback(
                 [
                     python,
                     "-m",
                     "pip",
                     "install",
-                    "torch",
-                    "torchaudio",
+                    "--upgrade",
+                    "pip",
+                    "wheel",
                     "--index-url",
-                    "https://download.pytorch.org/whl/cu128",
+                    pypi_index,
+                ],
+                [
+                    python,
+                    "-m",
+                    "pip",
+                    "install",
+                    "--upgrade",
+                    "pip",
+                    "wheel",
+                    "--index-url",
+                    _PYPI_OFFICIAL_INDEX,
+                ],
+                10,
+                20,
+                self.tr("正在更新安装工具"),
+            )
+            self._run_command_with_fallback(
+                [
+                    python,
+                    "-m",
+                    "pip",
+                    "install",
+                    _TORCH_PACKAGE,
+                    _TORCHAUDIO_PACKAGE,
+                    "--index-url",
+                    pypi_index,
+                    "--find-links",
+                    pytorch_mirror,
+                ],
+                [
+                    python,
+                    "-m",
+                    "pip",
+                    "install",
+                    _TORCH_PACKAGE,
+                    _TORCHAUDIO_PACKAGE,
+                    "--index-url",
+                    _PYTORCH_OFFICIAL_INDEX,
                 ],
                 20,
                 65,
                 self.tr("正在安装 PyTorch CUDA 运行库"),
             )
-            self._run_command(
+            self._run_command_with_fallback(
                 [
                     python,
                     "-m",
@@ -213,18 +279,41 @@ class QwenRuntimeInstallThread(QThread):
                     "install",
                     QWEN_ASR_PACKAGE,
                     SILERO_VAD_PACKAGE,
+                    "--index-url",
+                    pypi_index,
+                ],
+                [
+                    python,
+                    "-m",
+                    "pip",
+                    "install",
+                    QWEN_ASR_PACKAGE,
+                    SILERO_VAD_PACKAGE,
+                    "--index-url",
+                    _PYPI_OFFICIAL_INDEX,
                 ],
                 65,
                 88,
                 self.tr("正在安装 Qwen3-ASR 和 Silero VAD"),
             )
-            self._run_command(
+            self._run_command_with_fallback(
                 [
                     python,
                     "-m",
                     "pip",
                     "install",
                     FIRERED_VAD_PACKAGE,
+                    "--index-url",
+                    pypi_index,
+                ],
+                [
+                    python,
+                    "-m",
+                    "pip",
+                    "install",
+                    FIRERED_VAD_PACKAGE,
+                    "--index-url",
+                    _PYPI_OFFICIAL_INDEX,
                 ],
                 88,
                 95,

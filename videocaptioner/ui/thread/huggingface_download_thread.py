@@ -1,8 +1,12 @@
+import os
 from collections.abc import Callable
 
 from huggingface_hub import snapshot_download
 from PyQt5.QtCore import QThread, pyqtSignal
 from tqdm.auto import tqdm
+
+_DEFAULT_HF_MIRROR = "https://hf-mirror.com"
+_OFFICIAL_HF_ENDPOINT = "https://huggingface.co"
 
 
 def create_progress_bar_class(
@@ -63,12 +67,24 @@ class HuggingFaceDownloadThread(QThread):
     def run(self) -> None:
         try:
             self.progress.emit(0, self.tr("正在准备下载"))
-            snapshot_download(
-                repo_id=self.model_id,
-                local_dir=self.save_path,
-                ignore_patterns=list(self.ignore_patterns) or None,
-                tqdm_class=create_progress_bar_class(self.progress.emit),
+            endpoint = (
+                os.environ.get("VIDEOCAPTIONER_HF_ENDPOINT")
+                or os.environ.get("HF_ENDPOINT")
+                or _DEFAULT_HF_MIRROR
             )
+            download_options = {
+                "repo_id": self.model_id,
+                "local_dir": self.save_path,
+                "ignore_patterns": list(self.ignore_patterns) or None,
+                "tqdm_class": create_progress_bar_class(self.progress.emit),
+            }
+            try:
+                snapshot_download(endpoint=endpoint, **download_options)
+            except Exception:
+                if endpoint.rstrip("/") == _OFFICIAL_HF_ENDPOINT:
+                    raise
+                self.progress.emit(0, self.tr("国内镜像不可用，正在切换官方源"))
+                snapshot_download(endpoint=_OFFICIAL_HF_ENDPOINT, **download_options)
             self.progress.emit(100, self.tr("下载完成"))
         except Exception as exc:
             self.error.emit(str(exc))

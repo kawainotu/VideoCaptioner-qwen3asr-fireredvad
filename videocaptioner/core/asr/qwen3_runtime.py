@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -15,6 +16,7 @@ from videocaptioner.core.asr.qwen3_vad_models import (
 )
 
 RUNTIME_VERSION = 3
+LEGACY_COMPATIBLE_RUNTIME_VERSIONS = frozenset({2})
 QWEN_ASR_PACKAGE = "qwen-asr==0.0.6"
 SILERO_VAD_PACKAGE = "silero-vad>=6.0,<7"
 FIRERED_VAD_PACKAGE = "fireredvad==0.0.2"
@@ -37,6 +39,34 @@ def runtime_marker_path(runtime_dir: Optional[Path] = None) -> Path:
     return (runtime_dir or QWEN3_ASR_RUNTIME_PATH) / "videocaptioner-runtime.json"
 
 
+def _runtime_python_version(runtime_dir: Optional[Path] = None) -> tuple[int, int] | None:
+    """Read the venv Python version without starting the interpreter."""
+    config_path = (runtime_dir or QWEN3_ASR_RUNTIME_PATH) / "pyvenv.cfg"
+    try:
+        config = config_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    match = re.search(r"^\s*version\s*=\s*(\d+)\.(\d+)", config, re.MULTILINE)
+    if match is None:
+        return None
+    return int(match.group(1)), int(match.group(2))
+
+
+def _is_compatible_legacy_runtime(marker: dict, runtime_dir: Optional[Path]) -> bool:
+    """Accept an older marker when its dependency stack is still identical."""
+    if marker.get("runtime_version") not in LEGACY_COMPATIBLE_RUNTIME_VERSIONS:
+        return False
+    expected_packages = {
+        "qwen_asr": QWEN_ASR_PACKAGE,
+        "silero_vad": SILERO_VAD_PACKAGE,
+        "firered_vad": FIRERED_VAD_PACKAGE,
+    }
+    if any(marker.get(name) != requirement for name, requirement in expected_packages.items()):
+        return False
+    version = _runtime_python_version(runtime_dir)
+    return version is not None and is_supported_runtime_python_version(version)
+
+
 def is_runtime_ready(runtime_dir: Optional[Path] = None) -> bool:
     python_path = runtime_python_path(runtime_dir)
     marker_path = runtime_marker_path(runtime_dir)
@@ -46,7 +76,9 @@ def is_runtime_ready(runtime_dir: Optional[Path] = None) -> bool:
         marker = json.loads(marker_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
-    return marker.get("runtime_version") == RUNTIME_VERSION
+    if marker.get("runtime_version") == RUNTIME_VERSION:
+        return True
+    return _is_compatible_legacy_runtime(marker, runtime_dir)
 
 
 def write_runtime_marker(runtime_dir: Optional[Path] = None) -> None:

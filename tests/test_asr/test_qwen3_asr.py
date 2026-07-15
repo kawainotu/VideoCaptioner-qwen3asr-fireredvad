@@ -221,6 +221,42 @@ class TestQwenRuntimeChecks:
         )
         assert not is_runtime_ready(runtime)
 
+    def test_compatible_legacy_runtime_is_reused(self, tmp_path):
+        runtime = tmp_path / "runtime"
+        python = runtime / "Scripts" / "python.exe"
+        python.parent.mkdir(parents=True)
+        python.write_bytes(b"")
+        (runtime / "pyvenv.cfg").write_text("version = 3.12.11\n", encoding="utf-8")
+        (runtime / "videocaptioner-runtime.json").write_text(
+            """{
+  "runtime_version": 2,
+  "qwen_asr": "qwen-asr==0.0.6",
+  "silero_vad": "silero-vad>=6.0,<7",
+  "firered_vad": "fireredvad==0.0.2"
+}""",
+            encoding="utf-8",
+        )
+
+        assert is_runtime_ready(runtime)
+
+    def test_legacy_runtime_with_unsupported_python_is_not_reused(self, tmp_path):
+        runtime = tmp_path / "runtime"
+        python = runtime / "Scripts" / "python.exe"
+        python.parent.mkdir(parents=True)
+        python.write_bytes(b"")
+        (runtime / "pyvenv.cfg").write_text("version = 3.13.2\n", encoding="utf-8")
+        (runtime / "videocaptioner-runtime.json").write_text(
+            """{
+  "runtime_version": 2,
+  "qwen_asr": "qwen-asr==0.0.6",
+  "silero_vad": "silero-vad>=6.0,<7",
+  "firered_vad": "fireredvad==0.0.2"
+}""",
+            encoding="utf-8",
+        )
+
+        assert not is_runtime_ready(runtime)
+
     def test_model_ready_requires_config_and_weights(self, tmp_path):
         model_dir = Path(tmp_path) / "model"
         model_dir.mkdir()

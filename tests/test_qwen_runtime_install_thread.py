@@ -62,3 +62,22 @@ def test_ensure_runtime_rebuilds_an_unsupported_existing_environment(monkeypatch
             "Creating isolated runtime",
         )
     ]
+
+
+def test_command_falls_back_to_official_source(monkeypatch, tmp_path):
+    runtime = QwenRuntimeInstallThread(tmp_path / "runtime")
+    commands = []
+    progress = []
+
+    def run_command(command, *args):
+        commands.append(command)
+        if command == ["mirror"]:
+            raise RuntimeError("mirror unavailable")
+
+    monkeypatch.setattr(runtime, "_run_command", run_command)
+    runtime.progress.connect(lambda value, message: progress.append((value, message)))
+
+    runtime._run_command_with_fallback(["mirror"], ["official"], 20, 65, "install")
+
+    assert commands == [["mirror"], ["official"]]
+    assert any("官方源" in message for _, message in progress)

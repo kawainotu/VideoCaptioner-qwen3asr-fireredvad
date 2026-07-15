@@ -12,3 +12,21 @@ def test_installer_build_bundles_qwen3_asr_runner():
     assert "scripts\\download_firered_vad.py" in script
     assert '--add-data "$fireredVadModelDir;models\\FireRedVAD"' in script
     assert "$fireredVadBundlePath" in script
+
+
+def test_installer_build_bootstraps_pyinstaller_when_missing():
+    script = (PROJECT_ROOT / "scripts" / "build_installer.ps1").read_text(encoding="utf-8")
+
+    assert "$hasPyInstaller = $false" in script
+    assert 'uv pip install --python $python "pyinstaller>=6.0,<7.0"' in script
+
+
+def test_installer_filename_includes_platform_version_and_bundled_features():
+    installer_script = (PROJECT_ROOT / "installer" / "VideoCaptioner.iss").read_text(encoding="utf-8")
+
+    assert '#define MyAppArchitecture "win64"' in installer_script
+    assert '#define MyAppFeatures "qwen3-asr-fireredvad"' in installer_script
+    assert (
+        "OutputBaseFilename={#MyAppName}-Setup-{#MyAppArchitecture}-v{#MyAppVersion}-{#MyAppFeatures}"
+        in installer_script
+    )

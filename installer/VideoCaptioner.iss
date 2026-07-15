@@ -2,6 +2,8 @@
 #ifndef MyAppVersion
 #define MyAppVersion "1.4.2"
 #endif
+#define MyAppArchitecture "win64"
+#define MyAppFeatures "qwen3-asr-fireredvad"
 #define MyAppPublisher "Weifeng"
 #define MyAppURL "https://github.com/WEIFENG2333/VideoCaptioner"
 #define MyAppExeName "VideoCaptioner.exe"
@@ -19,7 +21,7 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 LicenseFile=..\LICENSE
 OutputDir=..\dist
-OutputBaseFilename=VideoCaptioner_qwen3-asr适配版1.0
+OutputBaseFilename={#MyAppName}-Setup-{#MyAppArchitecture}-v{#MyAppVersion}-{#MyAppFeatures}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern

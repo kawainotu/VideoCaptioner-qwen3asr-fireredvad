@@ -40,9 +40,20 @@ if (-not (Test-Path $fireredVadWeights)) {
     throw "FireRedVAD weights not found after download: $fireredVadWeights"
 }
 
-& $python -m PyInstaller --version *> $null
-if ($LASTEXITCODE -ne 0) {
+$hasPyInstaller = $false
+try {
+    & $python -m PyInstaller --version *> $null
+    $hasPyInstaller = $LASTEXITCODE -eq 0
+}
+catch {
+    # PowerShell treats a missing module as a terminating native-command error with ErrorActionPreference=Stop.
+    $hasPyInstaller = $false
+}
+if (-not $hasPyInstaller) {
     uv pip install --python $python "pyinstaller>=6.0,<7.0"
+    if ($LASTEXITCODE -ne 0) {
+        throw "PyInstaller installation failed."
+    }
 }
 
 & $python (Join-Path $projectRoot "scripts\create_app_icon.py")

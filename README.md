@@ -14,6 +14,18 @@ pip install videocaptioner          # 安装 CLI + GUI 桌面版
 
 免费功能（必剪语音识别、必应/谷歌翻译）**无需任何配置，安装即用**。
 
+## 本 fork 的改动
+
+此 fork 提供面向 Windows 的 Qwen3-ASR 与 FireRedVAD 定制安装包：
+
+- 新增 Qwen3-ASR 本地转录，支持 CUDA、CPU 和自动设备选择。
+- 在“管理组件”中下载并管理 Qwen3-ASR 模型、时间戳对齐模型和独立运行环境；模型支持从 Hugging Face 获取。
+- 新增 FireRedVAD。安装包内置离线权重，并提供 Silero VAD / FireRedVAD 切换、阈值和切分参数设置。
+- 改进 Qwen3-ASR 的语言选择、转录稳定性和低显存模式；识别与时间戳对齐会分阶段加载模型。
+- Windows 安装器会打包 Qwen3-ASR 运行程序与 FireRedVAD 权重；缺少 PyInstaller 时，构建脚本会自动安装所需版本。
+
+Windows 定制版安装包与更新说明见 [本 fork 的 Releases](https://github.com/kawainotu/VideoCaptioner-qwen3asr-fireredvad/releases)。首次使用 Qwen3-ASR 前，需要在“管理组件”下载模型；模型文件约 6.5 GB。
+
 ## CLI 命令行
 
 ```bash
@@ -73,7 +85,7 @@ videocaptioner                      # 无参数时也会打开桌面版
 <details>
 <summary>其他安装方式：Windows 安装包 / macOS 一键脚本</summary>
 
-**Windows**：从 [Release](https://github.com/WEIFENG2333/VideoCaptioner/releases) 下载安装包
+**Windows**：从 [本 fork 的 Releases](https://github.com/kawainotu/VideoCaptioner-qwen3asr-fireredvad/releases) 下载安装包
 
 **macOS**：
 ```bash

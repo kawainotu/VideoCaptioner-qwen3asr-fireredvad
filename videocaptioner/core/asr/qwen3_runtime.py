@@ -14,10 +14,16 @@ from videocaptioner.core.asr.qwen3_vad_models import (
     is_firered_vad_model_ready,
 )
 
-RUNTIME_VERSION = 2
+RUNTIME_VERSION = 3
 QWEN_ASR_PACKAGE = "qwen-asr==0.0.6"
 SILERO_VAD_PACKAGE = "silero-vad>=6.0,<7"
 FIRERED_VAD_PACKAGE = "fireredvad==0.0.2"
+SUPPORTED_RUNTIME_PYTHON_VERSIONS = ((3, 10), (3, 11), (3, 12))
+
+
+def is_supported_runtime_python_version(version: tuple[int, int]) -> bool:
+    """Return whether the FireRedVAD dependency stack supports this Python."""
+    return version in SUPPORTED_RUNTIME_PYTHON_VERSIONS
 
 
 def runtime_python_path(runtime_dir: Optional[Path] = None) -> Path:

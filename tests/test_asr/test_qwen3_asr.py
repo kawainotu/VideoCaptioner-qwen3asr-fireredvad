@@ -22,6 +22,7 @@ from videocaptioner.core.asr.qwen3_models import (
 from videocaptioner.core.asr.qwen3_runtime import (
     is_model_ready,
     is_runtime_ready,
+    is_supported_runtime_python_version,
     write_runtime_marker,
 )
 from videocaptioner.core.asr.qwen3_vad_models import (
@@ -197,6 +198,14 @@ class TestQwenRunnerHelpers:
 
 
 class TestQwenRuntimeChecks:
+    def test_runtime_python_versions_are_limited_to_firered_supported_versions(self):
+        assert is_supported_runtime_python_version((3, 10))
+        assert is_supported_runtime_python_version((3, 11))
+        assert is_supported_runtime_python_version((3, 12))
+        assert not is_supported_runtime_python_version((3, 9))
+        assert not is_supported_runtime_python_version((3, 13))
+        assert not is_supported_runtime_python_version((3, 14))
+
     def test_runtime_marker_requires_python_and_matching_version(self, tmp_path):
         runtime = tmp_path / "runtime"
         python = runtime / "Scripts" / "python.exe"
@@ -206,6 +215,10 @@ class TestQwenRuntimeChecks:
         write_runtime_marker(runtime)
 
         assert is_runtime_ready(runtime)
+        (runtime / "videocaptioner-runtime.json").write_text(
+            '{"runtime_version": 2}', encoding="utf-8"
+        )
+        assert not is_runtime_ready(runtime)
 
     def test_model_ready_requires_config_and_weights(self, tmp_path):
         model_dir = Path(tmp_path) / "model"

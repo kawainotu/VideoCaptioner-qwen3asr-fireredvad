@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -25,6 +26,53 @@ _PROJECT_ROOT = _PACKAGE_DIR.parent
 # Development mode: resource/ exists next to the package
 _IS_DEV = (_PROJECT_ROOT / "resource").is_dir() and not getattr(sys, "frozen", False)
 
+
+def _migrate_legacy_appdata(legacy_path: Path, appdata_path: Path) -> None:
+    """Move data out of the former duplicated Windows app-data directory.
+
+    ``platformdirs.user_data_dir(APP_NAME)`` uses the application name as both
+    the author and application directory on Windows. Earlier packaged builds
+    therefore stored data in ``.../VideoCaptioner/VideoCaptioner`` while older
+    releases used ``.../VideoCaptioner``. Only move entries that do not yet
+    exist at the canonical destination so an upgrade never overwrites user data.
+    """
+    if legacy_path == appdata_path or not legacy_path.is_dir():
+        return
+
+    appdata_path.mkdir(parents=True, exist_ok=True)
+    for name in ("models", "runtimes", "cache", "logs"):
+        source_directory = legacy_path / name
+        destination_directory = appdata_path / name
+        if not source_directory.is_dir():
+            continue
+        destination_directory.mkdir(parents=True, exist_ok=True)
+        for source in source_directory.iterdir():
+            destination = destination_directory / source.name
+            if destination.exists():
+                continue
+            try:
+                shutil.move(str(source), str(destination))
+            except (OSError, shutil.Error) as exc:
+                logging.getLogger(__name__).warning(
+                    "Could not migrate VideoCaptioner data from %s to %s: %s",
+                    source,
+                    destination,
+                    exc,
+                )
+
+    source_settings = legacy_path / "settings.json"
+    destination_settings = appdata_path / "settings.json"
+    if source_settings.is_file() and not destination_settings.exists():
+        try:
+            shutil.move(str(source_settings), str(destination_settings))
+        except (OSError, shutil.Error) as exc:
+            logging.getLogger(__name__).warning(
+                "Could not migrate VideoCaptioner settings from %s to %s: %s",
+                source_settings,
+                destination_settings,
+                exc,
+            )
+
 if _IS_DEV:
     ROOT_PATH = _PROJECT_ROOT
     RESOURCE_PATH = ROOT_PATH / "resource"
@@ -34,7 +82,10 @@ else:
     # Installed via pip — use platform-appropriate directories
     from platformdirs import user_data_dir
 
-    APPDATA_PATH = Path(user_data_dir(APP_NAME))
+    # appauthor=False keeps the established Windows location as
+    # %LOCALAPPDATA%/VideoCaptioner instead of nesting the app name twice.
+    APPDATA_PATH = Path(user_data_dir(APP_NAME, appauthor=False))
+    _migrate_legacy_appdata(Path(user_data_dir(APP_NAME)), APPDATA_PATH)
     if getattr(sys, "frozen", False):
         ROOT_PATH = Path(getattr(sys, "_MEIPASS", _PROJECT_ROOT))
         RESOURCE_PATH = ROOT_PATH / "resource"

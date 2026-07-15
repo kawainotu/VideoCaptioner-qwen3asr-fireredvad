@@ -3,7 +3,7 @@
 #define MyAppVersion "1.4.2"
 #endif
 #define MyAppArchitecture "win64"
-#define MyAppFeatures "qwen3-asr-fireredvad"
+#define MyAppFeatures "qwen3-asr-fireredvad-1.0"
 #define MyAppPublisher "Weifeng"
 #define MyAppURL "https://github.com/WEIFENG2333/VideoCaptioner"
 #define MyAppExeName "VideoCaptioner.exe"

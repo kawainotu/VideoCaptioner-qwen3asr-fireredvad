@@ -97,39 +97,49 @@ def fixed_chunks(audio: Any) -> list[AudioChunk]:
     return chunks
 
 
-def merge_speech_regions(regions: list[dict[str, int]], audio: Any) -> list[AudioChunk]:
+def merge_speech_regions(
+    regions: list[dict[str, int]],
+    audio: Any,
+    max_gap_seconds: float | None = MERGE_GAP_SECONDS,
+    min_chunk_seconds: float = 0.5,
+) -> list[AudioChunk]:
     if not regions:
         return []
     max_samples = MAX_CHUNK_SECONDS * SAMPLE_RATE
-    max_gap = int(MERGE_GAP_SECONDS * SAMPLE_RATE)
-    merged: list[tuple[int, int]] = []
-    start = int(regions[0]["start"])
-    end = int(regions[0]["end"])
-    for region in regions[1:]:
-        next_start = int(region["start"])
-        next_end = int(region["end"])
-        if next_start - end <= max_gap and next_end - start <= max_samples:
-            end = next_end
-            continue
+    if max_gap_seconds is None:
+        merged = [
+            (int(region["start"]), int(region["end"])) for region in regions
+        ]
+    else:
+        max_gap = int(max_gap_seconds * SAMPLE_RATE)
+        merged = []
+        start = int(regions[0]["start"])
+        end = int(regions[0]["end"])
+        for region in regions[1:]:
+            next_start = int(region["start"])
+            next_end = int(region["end"])
+            if next_start - end <= max_gap and next_end - start <= max_samples:
+                end = next_end
+                continue
+            merged.append((start, end))
+            start, end = next_start, next_end
         merged.append((start, end))
-        start, end = next_start, next_end
-    merged.append((start, end))
 
     chunks: list[AudioChunk] = []
+    min_samples = max(1, int(min_chunk_seconds * SAMPLE_RATE))
     for start, end in merged:
         cursor = start
         while cursor < end:
             chunk_end = min(cursor + max_samples, end)
-            if chunk_end - cursor >= SAMPLE_RATE // 2:
+            if chunk_end - cursor >= min_samples:
                 chunks.append(AudioChunk(audio[cursor:chunk_end], cursor / SAMPLE_RATE))
             cursor = chunk_end
     return chunks
 
 
-def detect_speech_chunks(audio: Any, args: argparse.Namespace, torch_module: Any) -> list[AudioChunk]:
-    if not args.vad_filter:
-        return fixed_chunks(audio)
-
+def detect_silero_speech_chunks(
+    audio: Any, args: argparse.Namespace, torch_module: Any
+) -> list[AudioChunk]:
     from silero_vad import get_speech_timestamps, load_silero_vad
 
     progress(5, "Loading Silero VAD")
@@ -149,6 +159,67 @@ def detect_speech_chunks(audio: Any, args: argparse.Namespace, torch_module: Any
     gc.collect()
     progress(10, f"VAD found {len(regions)} speech regions")
     return merge_speech_regions(regions, audio)
+
+
+def firered_timestamps_to_regions(
+    timestamps: list[tuple[float, float]], audio_length: int
+) -> list[dict[str, int]]:
+    regions = []
+    for start_seconds, end_seconds in timestamps:
+        start = max(0, min(audio_length, int(round(start_seconds * SAMPLE_RATE))))
+        end = max(start, min(audio_length, int(round(end_seconds * SAMPLE_RATE))))
+        if end > start:
+            regions.append({"start": start, "end": end})
+    return regions
+
+
+def detect_firered_speech_chunks(
+    audio: Any, args: argparse.Namespace, torch_module: Any
+) -> list[AudioChunk]:
+    from fireredvad import FireRedVad, FireRedVadConfig
+
+    if args.device == "cuda" and not torch_module.cuda.is_available():
+        raise RuntimeError("CUDA was selected but is not available in the Qwen runtime")
+
+    progress(5, "Loading FireRedVAD")
+    config = FireRedVadConfig(
+        use_gpu=args.device != "cpu" and torch_module.cuda.is_available(),
+        smooth_window_size=args.firered_vad_smooth_window_size,
+        speech_threshold=args.firered_vad_speech_threshold,
+        min_speech_frame=args.firered_vad_min_speech_frame,
+        max_speech_frame=args.firered_vad_max_speech_frame,
+        min_silence_frame=args.firered_vad_min_silence_frame,
+        merge_silence_frame=args.firered_vad_merge_silence_frame,
+        extend_speech_frame=args.firered_vad_extend_speech_frame,
+        chunk_max_frame=args.firered_vad_chunk_max_frame,
+    )
+    vad_model = FireRedVad.from_pretrained(args.firered_vad_model, config)
+    numpy = __import__("numpy")
+    pcm_audio = numpy.clip(audio * 32768.0, -32768, 32767).astype(numpy.int16)
+    result, probabilities = vad_model.detect((pcm_audio, SAMPLE_RATE))
+    regions = firered_timestamps_to_regions(result.get("timestamps", []), len(audio))
+    del vad_model, pcm_audio, probabilities
+    gc.collect()
+    if torch_module.cuda.is_available():
+        torch_module.cuda.empty_cache()
+    progress(10, f"FireRedVAD found {len(regions)} speech regions")
+    # FireRedVAD already applies its own merge and maximum-duration controls.
+    return merge_speech_regions(
+        regions,
+        audio,
+        max_gap_seconds=None,
+        min_chunk_seconds=0.1,
+    )
+
+
+def detect_speech_chunks(
+    audio: Any, args: argparse.Namespace, torch_module: Any
+) -> list[AudioChunk]:
+    if not args.vad_filter:
+        return fixed_chunks(audio)
+    if args.vad_model == "firered":
+        return detect_firered_speech_chunks(audio, args, torch_module)
+    return detect_silero_speech_chunks(audio, args, torch_module)
 
 
 def load_asr_model(args: argparse.Namespace, device: str, dtype: Any) -> Any:
@@ -350,10 +421,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--context", default="")
     parser.add_argument("--low-memory", action="store_true")
     parser.add_argument("--vad-filter", action="store_true")
+    parser.add_argument("--vad-model", choices=["silero", "firered"], default="silero")
+    parser.add_argument("--firered-vad-model", default="")
     parser.add_argument("--vad-threshold", type=float, default=0.5)
     parser.add_argument("--vad-min-speech-ms", type=int, default=250)
     parser.add_argument("--vad-min-silence-ms", type=int, default=500)
     parser.add_argument("--vad-speech-pad-ms", type=int, default=300)
+    parser.add_argument("--firered-vad-smooth-window-size", type=int, default=5)
+    parser.add_argument("--firered-vad-speech-threshold", type=float, default=0.4)
+    parser.add_argument("--firered-vad-min-speech-frame", type=int, default=20)
+    parser.add_argument("--firered-vad-max-speech-frame", type=int, default=2000)
+    parser.add_argument("--firered-vad-min-silence-frame", type=int, default=20)
+    parser.add_argument("--firered-vad-merge-silence-frame", type=int, default=0)
+    parser.add_argument("--firered-vad-extend-speech-frame", type=int, default=0)
+    parser.add_argument("--firered-vad-chunk-max-frame", type=int, default=30000)
     return parser
 
 

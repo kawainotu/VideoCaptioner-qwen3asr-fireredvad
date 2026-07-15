@@ -69,6 +69,7 @@ def run(args: Namespace, config: dict) -> int:
 
     # Build TranscribeConfig
     from videocaptioner.core.asr.qwen3_models import get_qwen3_asr_model
+    from videocaptioner.core.asr.qwen3_vad_models import resolve_firered_vad_model_path
     from videocaptioner.core.entities import (
         FasterWhisperModelEnum,
         TranscribeConfig,
@@ -119,10 +120,36 @@ def run(args: Namespace, config: dict) -> int:
         qwen_asr_device=get(config, "transcribe.qwen3_asr.device", "auto"),
         qwen_asr_low_memory=get(config, "transcribe.qwen3_asr.low_memory", True),
         qwen_asr_vad_filter=get(config, "transcribe.qwen3_asr.vad_filter", True),
+        qwen_asr_vad_model=get(config, "transcribe.qwen3_asr.vad_model", "silero"),
+        qwen_asr_vad_model_dir=str(resolve_firered_vad_model_path()),
         qwen_asr_vad_threshold=get(config, "transcribe.qwen3_asr.vad_threshold", 0.5),
         qwen_asr_vad_min_speech_ms=get(config, "transcribe.qwen3_asr.vad_min_speech_ms", 250),
         qwen_asr_vad_min_silence_ms=get(config, "transcribe.qwen3_asr.vad_min_silence_ms", 500),
         qwen_asr_vad_speech_pad_ms=get(config, "transcribe.qwen3_asr.vad_speech_pad_ms", 300),
+        qwen_asr_firered_vad_smooth_window_size=get(
+            config, "transcribe.qwen3_asr.firered_vad_smooth_window_size", 5
+        ),
+        qwen_asr_firered_vad_speech_threshold=get(
+            config, "transcribe.qwen3_asr.firered_vad_speech_threshold", 0.4
+        ),
+        qwen_asr_firered_vad_min_speech_frame=get(
+            config, "transcribe.qwen3_asr.firered_vad_min_speech_frame", 20
+        ),
+        qwen_asr_firered_vad_max_speech_frame=get(
+            config, "transcribe.qwen3_asr.firered_vad_max_speech_frame", 2000
+        ),
+        qwen_asr_firered_vad_min_silence_frame=get(
+            config, "transcribe.qwen3_asr.firered_vad_min_silence_frame", 20
+        ),
+        qwen_asr_firered_vad_merge_silence_frame=get(
+            config, "transcribe.qwen3_asr.firered_vad_merge_silence_frame", 0
+        ),
+        qwen_asr_firered_vad_extend_speech_frame=get(
+            config, "transcribe.qwen3_asr.firered_vad_extend_speech_frame", 0
+        ),
+        qwen_asr_firered_vad_chunk_max_frame=get(
+            config, "transcribe.qwen3_asr.firered_vad_chunk_max_frame", 30000
+        ),
         qwen_asr_prompt=get(config, "transcribe.qwen3_asr.prompt", ""),
         # WhisperCpp options
         whisper_model=wcpp_model_enum,

@@ -8,6 +8,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 from videocaptioner.config import QWEN3_ASR_RUNTIME_PATH
 from videocaptioner.core.asr.qwen3_runtime import (
+    FIRERED_VAD_PACKAGE,
     QWEN_ASR_PACKAGE,
     SILERO_VAD_PACKAGE,
     runtime_python_path,
@@ -110,16 +111,17 @@ class QwenRuntimeInstallThread(QThread):
                     "install",
                     QWEN_ASR_PACKAGE,
                     SILERO_VAD_PACKAGE,
+                    FIRERED_VAD_PACKAGE,
                 ],
                 65,
                 95,
-                self.tr("正在安装 Qwen3-ASR 与 Silero VAD"),
+                self.tr("正在安装 Qwen3-ASR、Silero VAD 与 FireRedVAD"),
             )
             self._run_command(
                 [
                     python,
                     "-c",
-                    "import qwen_asr, silero_vad, torch; print(torch.__version__)",
+                    "import fireredvad, qwen_asr, silero_vad, torch; print(torch.__version__)",
                 ],
                 95,
                 99,

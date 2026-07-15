@@ -33,6 +33,13 @@ from videocaptioner.core.asr.qwen3_runtime import (
     is_runtime_ready,
     missing_components,
 )
+from videocaptioner.core.asr.qwen3_vad_models import (
+    FIRERED_VAD_MODEL_KEY,
+    QWEN3_VAD_MODELS,
+    Qwen3VADModel,
+    get_qwen3_vad_model,
+    is_firered_vad_model_ready,
+)
 from videocaptioner.core.entities import TranscribeLanguageEnum
 from videocaptioner.core.utils.platform_utils import open_folder
 from videocaptioner.ui.common.config import cfg
@@ -46,12 +53,15 @@ from videocaptioner.ui.thread.modelscope_download_thread import ModelscopeDownlo
 from videocaptioner.ui.thread.qwen_runtime_install_thread import QwenRuntimeInstallThread
 
 
-def qwen_components(asr_model: Qwen3ASRModel) -> tuple[dict, ...]:
+def qwen_components(
+    asr_model: Qwen3ASRModel, vad_model: Qwen3VADModel
+) -> tuple[dict, ...]:
     """Build the component list for the selected ASR checkpoint."""
-    return (
+    components = [
         {
             "name": "Qwen3-ASR runtime",
             "size": "Python + PyTorch",
+            "kind": "runtime",
             "model_id": None,
             "path": None,
             "source": None,
@@ -60,6 +70,7 @@ def qwen_components(asr_model: Qwen3ASRModel) -> tuple[dict, ...]:
         {
             "name": asr_model.model_id,
             "size": asr_model.size,
+            "kind": "asr",
             "model_id": asr_model.model_id,
             "path": asr_model.path,
             "source": asr_model.source,
@@ -68,12 +79,26 @@ def qwen_components(asr_model: Qwen3ASRModel) -> tuple[dict, ...]:
         {
             "name": "Qwen3-ForcedAligner-0.6B",
             "size": "1.84 GB",
+            "kind": "aligner",
             "model_id": "Qwen/Qwen3-ForcedAligner-0.6B",
             "path": QWEN3_ALIGNER_MODEL_PATH,
             "source": "modelscope",
             "ignore_patterns": (),
         },
-    )
+    ]
+    if vad_model.model_id and vad_model.path:
+        components.append(
+            {
+                "name": vad_model.label,
+                "size": vad_model.size,
+                "kind": "firered-vad",
+                "model_id": vad_model.model_id,
+                "path": vad_model.path,
+                "source": vad_model.source,
+                "ignore_patterns": vad_model.ignore_patterns,
+            }
+        )
+    return tuple(components)
 
 QWEN_TIMESTAMP_LANGUAGES = (
     TranscribeLanguageEnum.AUTO,
@@ -92,11 +117,18 @@ QWEN_TIMESTAMP_LANGUAGES = (
 
 
 class Qwen3ASRManagerDialog(MessageBoxBase):
-    def __init__(self, asr_model: Qwen3ASRModel, parent=None, setting_widget=None):
+    def __init__(
+        self,
+        asr_model: Qwen3ASRModel,
+        vad_model: Qwen3VADModel,
+        parent=None,
+        setting_widget=None,
+    ):
         super().__init__(parent)
         self.widget.setMinimumWidth(680)
         self.asr_model = asr_model
-        self.components = qwen_components(asr_model)
+        self.vad_model = vad_model
+        self.components = qwen_components(asr_model, vad_model)
         self.setting_widget = setting_widget
         self.active_thread = None
         self.operation_failed = False
@@ -115,7 +147,7 @@ class Qwen3ASRManagerDialog(MessageBoxBase):
         layout.addLayout(title_row)
         layout.addWidget(
             BodyLabel(
-                self.tr("时间戳功能需要同时安装识别模型和强制对齐模型"), self
+                self.tr("请安装识别、强制对齐及当前所选 VAD 所需的组件"), self
             )
         )
 
@@ -130,6 +162,18 @@ class Qwen3ASRManagerDialog(MessageBoxBase):
         self.model_selector.currentItemChanged.connect(self._on_model_changed)
         model_selector_row.addWidget(self.model_selector)
         layout.addLayout(model_selector_row)
+
+        vad_selector_row = QHBoxLayout()
+        vad_selector_row.addWidget(BodyLabel(self.tr("VAD 模型"), self))
+        vad_selector_row.addStretch()
+        self.vad_selector = SegmentedWidget(self)
+        self.vad_selector.setMinimumWidth(360)
+        for model in QWEN3_VAD_MODELS:
+            self.vad_selector.addItem(model.key, self.tr(model.label))
+        self.vad_selector.setCurrentItem(self.vad_model.key)
+        self.vad_selector.currentItemChanged.connect(self._on_vad_model_changed)
+        vad_selector_row.addWidget(self.vad_selector)
+        layout.addLayout(vad_selector_row)
 
         self.table = TableWidget(self)
         self.table.setEditTriggers(TableWidget.NoEditTriggers)
@@ -167,8 +211,10 @@ class Qwen3ASRManagerDialog(MessageBoxBase):
 
     def _component_ready(self, row: int) -> bool:
         component = self.components[row]
-        if component["path"] is None:
+        if component["kind"] == "runtime":
             return is_runtime_ready()
+        if component["kind"] == "firered-vad":
+            return is_firered_vad_model_ready()
         return is_model_ready(component["path"])
 
     def _on_model_changed(self, key: str) -> None:
@@ -176,13 +222,24 @@ class Qwen3ASRManagerDialog(MessageBoxBase):
         if model.key == self.asr_model.key:
             return
         self.asr_model = model
-        self.components = qwen_components(model)
+        self.components = qwen_components(model, self.vad_model)
         if cfg.qwen_asr_model.value != model.key:
             cfg.set(cfg.qwen_asr_model, model.key)
         self._refresh_table()
 
+    def _on_vad_model_changed(self, key: str) -> None:
+        model = get_qwen3_vad_model(key)
+        if model.key == self.vad_model.key:
+            return
+        self.vad_model = model
+        self.components = qwen_components(self.asr_model, model)
+        if cfg.qwen_asr_vad_model.value != model.key:
+            cfg.set(cfg.qwen_asr_vad_model, model.key)
+        self._refresh_table()
+
     def _refresh_table(self) -> None:
         self.table.setRowCount(len(self.components))
+        self.table.setFixedHeight(34 + 48 * len(self.components))
         for row, component in enumerate(self.components):
             ready = self._component_ready(row)
             name_item = QTableWidgetItem(component["name"])
@@ -283,15 +340,21 @@ class Qwen3ASRSettingWidget(QWidget):
         self._missing_prompted = False
         self._setup_ui()
         self._connect_signals()
+        self.refresh_status()
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
         asr_model = get_qwen3_asr_model(cfg.qwen_asr_model.value)
-        if not self._missing_prompted and missing_components(asr_model_dir=asr_model.path):
+        if not self._missing_prompted and missing_components(
+            asr_model_dir=asr_model.path,
+            vad_model_key=(
+                cfg.qwen_asr_vad_model.value if cfg.qwen_asr_vad_filter.value else None
+            ),
+        ):
             self._missing_prompted = True
             InfoBar.warning(
                 self.tr("Qwen3-ASR 尚未就绪"),
-                self.tr("请先安装运行环境、识别模型和时间戳模型"),
+                self.tr("请先安装运行环境、识别模型、时间戳模型和所选 VAD"),
                 parent=self.window(),
                 duration=5000,
                 position=InfoBarPosition.BOTTOM,
@@ -331,7 +394,7 @@ class Qwen3ASRSettingWidget(QWidget):
             self.tr("管理组件"),
             FIF.DOWNLOAD,
             self.tr("运行环境与模型"),
-            self.tr("安装或更新 Qwen3-ASR 运行环境和模型"),
+            self.tr("安装或更新 Qwen3-ASR、时间戳与 VAD 组件"),
             self.model_group,
         )
         self.device_card = ComboBoxSettingCard(
@@ -363,7 +426,9 @@ class Qwen3ASRSettingWidget(QWidget):
             self.model_group,
         )
         self.language_card.comboBox = ComboBox(self.language_card)
-        self.language_card.hBoxLayout.addWidget(self.language_card.comboBox, 0, Qt.AlignRight)
+        self.language_card.hBoxLayout.addWidget(
+            self.language_card.comboBox, 0, Qt.AlignRight  # type: ignore[arg-type]
+        )
         self.language_card.hBoxLayout.addSpacing(16)
         for language in self._qwen_languages:
             self.language_card.comboBox.addItem(language.value, userData=language)
@@ -377,10 +442,18 @@ class Qwen3ASRSettingWidget(QWidget):
             cfg.qwen_asr_vad_filter,
             self.vad_group,
         )
+        self.vad_model_card = ComboBoxSettingCard(
+            cfg.qwen_asr_vad_model,
+            FIF.ROBOT,
+            self.tr("VAD 模型"),
+            self.tr("选择语音活动检测模型"),
+            [self.tr(model.label) for model in QWEN3_VAD_MODELS],
+            self.vad_group,
+        )
         self.vad_threshold_card = DoubleSpinBoxSettingCard(
             cfg.qwen_asr_vad_threshold,
             FIF.VOLUME,  # type: ignore[arg-type]
-            self.tr("VAD 阈值"),
+            self.tr("Silero 语音阈值"),
             self.tr("高于此语音概率的片段会被保留"),
             minimum=0.0,
             maximum=1.0,
@@ -415,6 +488,94 @@ class Qwen3ASRSettingWidget(QWidget):
             maximum=2000,
             parent=self.vad_group,
         )
+        self.vad_min_speech_card.spinBox.setSuffix(" ms")
+        self.vad_min_silence_card.spinBox.setSuffix(" ms")
+        self.vad_pad_card.spinBox.setSuffix(" ms")
+
+        self.firered_smooth_window_card = SpinBoxSettingCard(
+            cfg.qwen_asr_firered_vad_smooth_window_size,
+            FIF.UNIT,  # type: ignore[arg-type]
+            self.tr("平滑窗口"),
+            self.tr("对语音概率进行平滑的连续帧数"),
+            minimum=1,
+            maximum=101,
+            parent=self.vad_group,
+        )
+        self.firered_threshold_card = DoubleSpinBoxSettingCard(
+            cfg.qwen_asr_firered_vad_speech_threshold,
+            FIF.VOLUME,  # type: ignore[arg-type]
+            self.tr("FireRed 语音阈值"),
+            self.tr("高于此概率的帧会判定为语音"),
+            minimum=0.0,
+            maximum=1.0,
+            decimals=2,
+            step=0.05,
+            parent=self.vad_group,
+        )
+        self.firered_min_speech_card = SpinBoxSettingCard(
+            cfg.qwen_asr_firered_vad_min_speech_frame,
+            FIF.MICROPHONE,  # type: ignore[arg-type]
+            self.tr("最短语音帧"),
+            self.tr("低于此长度的语音会被过滤，1 帧约 10 ms"),
+            minimum=1,
+            maximum=5000,
+            parent=self.vad_group,
+        )
+        self.firered_max_speech_card = SpinBoxSettingCard(
+            cfg.qwen_asr_firered_vad_max_speech_frame,
+            FIF.MICROPHONE,  # type: ignore[arg-type]
+            self.tr("最长语音帧"),
+            self.tr("达到此长度时强制切分语音，1 帧约 10 ms"),
+            minimum=1,
+            maximum=30000,
+            parent=self.vad_group,
+        )
+        self.firered_min_silence_card = SpinBoxSettingCard(
+            cfg.qwen_asr_firered_vad_min_silence_frame,
+            FIF.PAUSE,  # type: ignore[arg-type]
+            self.tr("最短静音帧"),
+            self.tr("达到此长度的静音会结束当前语音段"),
+            minimum=1,
+            maximum=5000,
+            parent=self.vad_group,
+        )
+        self.firered_merge_silence_card = SpinBoxSettingCard(
+            cfg.qwen_asr_firered_vad_merge_silence_frame,
+            FIF.PAUSE,  # type: ignore[arg-type]
+            self.tr("合并静音帧"),
+            self.tr("间隔不超过此长度的相邻语音段会被合并"),
+            minimum=0,
+            maximum=5000,
+            parent=self.vad_group,
+        )
+        self.firered_extend_speech_card = SpinBoxSettingCard(
+            cfg.qwen_asr_firered_vad_extend_speech_frame,
+            FIF.CUT,  # type: ignore[arg-type]
+            self.tr("语音边界扩展"),
+            self.tr("在检测到的语音段前后保留额外帧"),
+            minimum=0,
+            maximum=1000,
+            parent=self.vad_group,
+        )
+        self.firered_chunk_max_card = SpinBoxSettingCard(
+            cfg.qwen_asr_firered_vad_chunk_max_frame,
+            FIF.CUT,  # type: ignore[arg-type]
+            self.tr("单次检测最大帧数"),
+            self.tr("超长音频按此长度分块检测，1 帧约 10 ms"),
+            minimum=100,
+            maximum=60000,
+            parent=self.vad_group,
+        )
+        for card in (
+            self.firered_smooth_window_card,
+            self.firered_min_speech_card,
+            self.firered_max_speech_card,
+            self.firered_min_silence_card,
+            self.firered_merge_silence_card,
+            self.firered_extend_speech_card,
+            self.firered_chunk_max_card,
+        ):
+            card.spinBox.setSuffix(" 帧")
 
         self.other_group = SettingCardGroup(self.tr("其他设置"), self)
         self.timestamp_card = SettingCard(
@@ -443,10 +604,19 @@ class Qwen3ASRSettingWidget(QWidget):
             self.model_group.addSettingCard(card)
         for card in (
             self.vad_filter_card,
+            self.vad_model_card,
             self.vad_threshold_card,
             self.vad_min_speech_card,
             self.vad_min_silence_card,
             self.vad_pad_card,
+            self.firered_smooth_window_card,
+            self.firered_threshold_card,
+            self.firered_min_speech_card,
+            self.firered_max_speech_card,
+            self.firered_min_silence_card,
+            self.firered_merge_silence_card,
+            self.firered_extend_speech_card,
+            self.firered_chunk_max_card,
         ):
             self.vad_group.addSettingCard(card)
         self.other_group.addSettingCard(self.timestamp_card)
@@ -459,6 +629,7 @@ class Qwen3ASRSettingWidget(QWidget):
         self.device_card.comboBox.setMinimumWidth(200)
         self.model_selector.setMinimumWidth(360)
         self.language_card.comboBox.setMinimumWidth(200)
+        self.vad_model_card.comboBox.setMinimumWidth(200)
         self.prompt_card.lineEdit.setMinimumWidth(200)
         self.scroll_area.setWidget(self.container)
         self.scroll_area.setWidgetResizable(True)
@@ -471,6 +642,7 @@ class Qwen3ASRSettingWidget(QWidget):
         self.language_card.comboBox.currentIndexChanged.connect(self._on_qwen_language_changed)
         cfg.transcribe_language.valueChanged.connect(self._set_qwen_language)
         self.vad_filter_card.checkedChanged.connect(self._on_vad_filter_changed)
+        cfg.qwen_asr_vad_model.valueChanged.connect(self._on_vad_model_changed)
         self._on_vad_filter_changed(cfg.qwen_asr_vad_filter.value)
 
     def _on_qwen_language_changed(self, index: int) -> None:
@@ -500,26 +672,61 @@ class Qwen3ASRSettingWidget(QWidget):
             self.language_card.comboBox.setCurrentIndex(index)
 
     def _on_vad_filter_changed(self, checked: bool) -> None:
-        for card in (
+        self.vad_model_card.setEnabled(checked)
+        self._update_vad_cards()
+        self.refresh_status()
+
+    def _on_vad_model_changed(self, _key: str) -> None:
+        self._update_vad_cards()
+        self.refresh_status()
+
+    def _update_vad_cards(self) -> None:
+        enabled = cfg.qwen_asr_vad_filter.value
+        use_firered = (
+            get_qwen3_vad_model(cfg.qwen_asr_vad_model.value).key
+            == FIRERED_VAD_MODEL_KEY
+        )
+        silero_cards = (
             self.vad_threshold_card,
             self.vad_min_speech_card,
             self.vad_min_silence_card,
             self.vad_pad_card,
-        ):
-            card.setEnabled(checked)
+        )
+        firered_cards = (
+            self.firered_smooth_window_card,
+            self.firered_threshold_card,
+            self.firered_min_speech_card,
+            self.firered_max_speech_card,
+            self.firered_min_silence_card,
+            self.firered_merge_silence_card,
+            self.firered_extend_speech_card,
+            self.firered_chunk_max_card,
+        )
+        for card in silero_cards:
+            card.setVisible(not use_firered)
+            card.setEnabled(enabled)
+        for card in firered_cards:
+            card.setVisible(use_firered)
+            card.setEnabled(enabled)
 
     def _show_manager(self) -> None:
         model = get_qwen3_asr_model(cfg.qwen_asr_model.value)
-        Qwen3ASRManagerDialog(model, self.window(), self).exec_()
+        vad_model = get_qwen3_vad_model(cfg.qwen_asr_vad_model.value)
+        Qwen3ASRManagerDialog(model, vad_model, self.window(), self).exec_()
 
     def refresh_status(self) -> None:
         model = get_qwen3_asr_model(cfg.qwen_asr_model.value)
-        missing = missing_components(asr_model_dir=model.path)
+        vad_model = get_qwen3_vad_model(cfg.qwen_asr_vad_model.value)
+        missing = missing_components(
+            asr_model_dir=model.path,
+            vad_model_key=vad_model.key if cfg.qwen_asr_vad_filter.value else None,
+        )
         if missing:
             self.model_card.setContent(
                 f"{model.label}；{self.tr('缺少：')}{', '.join(missing)}"
             )
         else:
-            self.model_card.setContent(
-                f"{model.label} + Qwen3-ForcedAligner-0.6B{self.tr('（已就绪）')}"
-            )
+            components = f"{model.label} + Qwen3-ForcedAligner-0.6B"
+            if cfg.qwen_asr_vad_filter.value:
+                components += f" + {vad_model.label}"
+            self.model_card.setContent(f"{components}{self.tr('（已就绪）')}")

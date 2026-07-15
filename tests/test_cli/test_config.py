@@ -134,6 +134,8 @@ class TestBuildConfig:
         assert config["transcribe"]["qwen3_asr"]["model"] == "qwen3-asr-1.7b"
         assert config["transcribe"]["qwen3_asr"]["device"] == "auto"
         assert config["transcribe"]["qwen3_asr"]["low_memory"] is True
+        assert config["transcribe"]["qwen3_asr"]["vad_model"] == "silero"
+        assert config["transcribe"]["qwen3_asr"]["firered_vad_speech_threshold"] == 0.4
 
     def test_cli_overrides(self):
         config = build_config(cli_overrides={"llm": {"model": "custom"}})

@@ -10,6 +10,9 @@ $resourceDir = Join-Path $projectRoot "resource"
 $icon = Join-Path $resourceDir "assets\logo.ico"
 $qwenRunner = Join-Path $projectRoot "videocaptioner\core\asr\qwen3_asr_runner.py"
 $qwenRunnerBundlePath = Join-Path $projectRoot "dist\VideoCaptioner\_internal\videocaptioner\core\asr\qwen3_asr_runner.py"
+$fireredVadModelDir = Join-Path $projectRoot "build\fireredvad-model"
+$fireredVadWeights = Join-Path $fireredVadModelDir "VAD\model.pth.tar"
+$fireredVadBundlePath = Join-Path $projectRoot "dist\VideoCaptioner\_internal\models\FireRedVAD\VAD\model.pth.tar"
 $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
 if (-not $iscc) {
     $innoCandidates = @(
@@ -25,6 +28,16 @@ if (-not (Test-Path $python)) {
 }
 if (-not (Test-Path $qwenRunner)) {
     throw "Qwen3-ASR runner not found in source tree: $qwenRunner"
+}
+
+if (-not (Test-Path $fireredVadWeights)) {
+    & $python (Join-Path $projectRoot "scripts\download_firered_vad.py") $fireredVadModelDir
+    if ($LASTEXITCODE -ne 0) {
+        throw "FireRedVAD model download failed."
+    }
+}
+if (-not (Test-Path $fireredVadWeights)) {
+    throw "FireRedVAD weights not found after download: $fireredVadWeights"
 }
 
 & $python -m PyInstaller --version *> $null
@@ -45,6 +58,7 @@ try {
         --icon $icon `
         --add-data "$resourceDir;resource" `
         --add-data "$qwenRunner;videocaptioner\core\asr" `
+        --add-data "$fireredVadModelDir;models\FireRedVAD" `
         --collect-all qfluentwidgets `
         --collect-submodules modelscope `
         videocaptioner\ui\main.py
@@ -53,6 +67,9 @@ try {
     }
     if (-not (Test-Path $qwenRunnerBundlePath)) {
         throw "PyInstaller did not bundle the Qwen3-ASR runner: $qwenRunnerBundlePath"
+    }
+    if (-not (Test-Path $fireredVadBundlePath)) {
+        throw "PyInstaller did not bundle FireRedVAD: $fireredVadBundlePath"
     }
 
     if (-not $iscc) {

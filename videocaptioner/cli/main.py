@@ -124,7 +124,7 @@ def _build_transcribe_parser(subparsers) -> None:
         p.add_argument(arg, help=argparse.SUPPRESS)
     p.add_argument("--fw-vad-threshold", type=float, help=argparse.SUPPRESS)
     p.add_argument("--fw-voice-extraction", action="store_true", help=argparse.SUPPRESS)
-    for arg in ["--qwen-device", "--qwen-prompt"]:
+    for arg in ["--qwen-device", "--qwen-prompt", "--qwen-vad-model"]:
         p.add_argument(arg, help=argparse.SUPPRESS)
     p.add_argument("--qwen-vad-threshold", type=float, help=argparse.SUPPRESS)
     p.add_argument("--qwen-no-low-memory", action="store_true", help=argparse.SUPPRESS)
@@ -554,6 +554,7 @@ def _build_cli_overrides(args: argparse.Namespace) -> dict:
 
     # Qwen3-ASR
     _set("transcribe.qwen3_asr.device", getattr(args, "qwen_device", None))
+    _set("transcribe.qwen3_asr.vad_model", getattr(args, "qwen_vad_model", None))
     _set("transcribe.qwen3_asr.vad_threshold", getattr(args, "qwen_vad_threshold", None))
     _set("transcribe.qwen3_asr.prompt", getattr(args, "qwen_prompt", None))
     if getattr(args, "qwen_no_low_memory", False):

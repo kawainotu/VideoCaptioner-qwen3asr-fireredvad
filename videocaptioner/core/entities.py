@@ -581,10 +581,20 @@ class TranscribeConfig:
     qwen_asr_device: str = "auto"
     qwen_asr_low_memory: bool = True
     qwen_asr_vad_filter: bool = True
+    qwen_asr_vad_model: str = "silero"
+    qwen_asr_vad_model_dir: Optional[str] = None
     qwen_asr_vad_threshold: float = 0.5
     qwen_asr_vad_min_speech_ms: int = 250
     qwen_asr_vad_min_silence_ms: int = 500
     qwen_asr_vad_speech_pad_ms: int = 300
+    qwen_asr_firered_vad_smooth_window_size: int = 5
+    qwen_asr_firered_vad_speech_threshold: float = 0.4
+    qwen_asr_firered_vad_min_speech_frame: int = 20
+    qwen_asr_firered_vad_max_speech_frame: int = 2000
+    qwen_asr_firered_vad_min_silence_frame: int = 20
+    qwen_asr_firered_vad_merge_silence_frame: int = 0
+    qwen_asr_firered_vad_extend_speech_frame: int = 0
+    qwen_asr_firered_vad_chunk_max_frame: int = 30000
     qwen_asr_prompt: Optional[str] = None
 
     def _mask_key(self, key: Optional[str]) -> str:
@@ -632,10 +642,28 @@ class TranscribeConfig:
             lines.append(f"Low Memory: {self.qwen_asr_low_memory}")
             lines.append(f"VAD Filter: {self.qwen_asr_vad_filter}")
             if self.qwen_asr_vad_filter:
-                lines.append(f"VAD Threshold: {self.qwen_asr_vad_threshold}")
-                lines.append(f"VAD Min Speech: {self.qwen_asr_vad_min_speech_ms} ms")
-                lines.append(f"VAD Min Silence: {self.qwen_asr_vad_min_silence_ms} ms")
-                lines.append(f"VAD Speech Padding: {self.qwen_asr_vad_speech_pad_ms} ms")
+                lines.append(f"VAD Model: {self.qwen_asr_vad_model}")
+                if self.qwen_asr_vad_model == "firered":
+                    lines.append(
+                        f"FireRed VAD Threshold: "
+                        f"{self.qwen_asr_firered_vad_speech_threshold}"
+                    )
+                    lines.append(
+                        f"FireRed VAD Min/Max Speech: "
+                        f"{self.qwen_asr_firered_vad_min_speech_frame}/"
+                        f"{self.qwen_asr_firered_vad_max_speech_frame} frames"
+                    )
+                else:
+                    lines.append(f"VAD Threshold: {self.qwen_asr_vad_threshold}")
+                    lines.append(
+                        f"VAD Min Speech: {self.qwen_asr_vad_min_speech_ms} ms"
+                    )
+                    lines.append(
+                        f"VAD Min Silence: {self.qwen_asr_vad_min_silence_ms} ms"
+                    )
+                    lines.append(
+                        f"VAD Speech Padding: {self.qwen_asr_vad_speech_pad_ms} ms"
+                    )
             if self.qwen_asr_prompt:
                 lines.append(f"Context: {self.qwen_asr_prompt[:30]}...")
 

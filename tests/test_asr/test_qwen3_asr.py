@@ -8,6 +8,7 @@ from videocaptioner.core.asr.qwen3_asr_runner import (
     AudioChunk,
     TranscribedChunk,
     approximate_segments,
+    firered_timestamps_to_regions,
     fixed_chunks,
     normalize_language,
     transcribe_chunks,
@@ -20,6 +21,11 @@ from videocaptioner.core.asr.qwen3_runtime import (
     is_model_ready,
     is_runtime_ready,
     write_runtime_marker,
+)
+from videocaptioner.core.asr.qwen3_vad_models import (
+    FIRERED_VAD_MODEL_KEY,
+    get_qwen3_vad_model,
+    is_firered_vad_model_ready,
 )
 
 
@@ -146,6 +152,26 @@ class TestQwenRunnerHelpers:
         assert chunks[0].offset_seconds == 0
         assert chunks[1].offset_seconds == 170
 
+    def test_converts_firered_timestamps_to_sample_regions(self):
+        regions = firered_timestamps_to_regions([(0.25, 1.5)], 32000)
+
+        assert regions == [{"start": 4000, "end": 24000}]
+
+    def test_builds_firered_runner_arguments(self, tmp_path):
+        model_dir = tmp_path / "FireRedVAD" / "VAD"
+        asr = Qwen3ASR(
+            b"",
+            vad_model=FIRERED_VAD_MODEL_KEY,
+            firered_vad_model_dir=str(model_dir),
+            firered_vad_max_speech_frame=2400,
+        )
+
+        command = asr._build_command(tmp_path / "audio.wav", tmp_path / "result.json")
+
+        assert command[command.index("--vad-model") + 1] == FIRERED_VAD_MODEL_KEY
+        assert command[command.index("--firered-vad-model") + 1] == str(model_dir)
+        assert command[command.index("--firered-vad-max-speech-frame") + 1] == "2400"
+
 
 class TestQwenRuntimeChecks:
     def test_runtime_marker_requires_python_and_matching_version(self, tmp_path):
@@ -169,6 +195,15 @@ class TestQwenRuntimeChecks:
         (model_dir / "model.safetensors").write_bytes(b"weights")
         assert is_model_ready(model_dir)
 
+    def test_firered_model_ready_requires_cmvn_and_weights(self, tmp_path):
+        model_dir = Path(tmp_path) / "FireRedVAD" / "VAD"
+        model_dir.mkdir(parents=True)
+        (model_dir / "cmvn.ark").write_bytes(b"cmvn")
+        assert not is_firered_vad_model_ready(model_dir)
+
+        (model_dir / "model.pth.tar").write_bytes(b"weights")
+        assert is_firered_vad_model_ready(model_dir)
+
 
 class TestQwenModelVariants:
     def test_uses_the_official_model_when_selection_is_missing(self):
@@ -185,3 +220,10 @@ class TestQwenModelVariants:
         assert model.source == "huggingface"
         assert model.path.name == "Qwen3-ASR-1.7B-JA-Anime-Galgame"
         assert "optimizer.pt" in model.ignore_patterns
+
+    def test_resolves_firered_vad_choice(self):
+        model = get_qwen3_vad_model(FIRERED_VAD_MODEL_KEY)
+
+        assert model.model_id == "FireRedTeam/FireRedVAD"
+        assert model.path is not None
+        assert model.path.name == "FireRedVAD"

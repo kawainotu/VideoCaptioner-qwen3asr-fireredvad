@@ -94,7 +94,7 @@ curl -fsSL https://raw.githubusercontent.com/WEIFENG2333/VideoCaptioner/master/s
 
 在转录模型中选择 `Qwen3-ASR`，然后打开“管理组件”安装独立运行环境、`Qwen3-ASR-1.7B` 与 `Qwen3-ForcedAligner-0.6B`。模型文件约 6.5 GB；时间戳模型用于生成字幕所需的字词级时间轴。
 
-默认开启低显存模式，识别与时间戳对齐会分阶段加载模型，适合 8 GB 显存设备。Qwen3-ASR 设置页提供 CUDA/CPU/自动设备选择、Silero VAD 过滤、阈值与切分参数，以及上下文提示。
+默认开启低显存模式，识别与时间戳对齐会分阶段加载模型，适合 8 GB 显存设备。Qwen3-ASR 设置页提供 CUDA/CPU/自动设备选择、Silero VAD / FireRedVAD 切换、对应的阈值与切分参数，以及上下文提示。发布安装包会内置 FireRedVAD 离线权重，也可在“管理组件”中更新。
 
 CLI 使用示例：
 

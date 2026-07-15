@@ -9,3 +9,6 @@ def test_installer_build_bundles_qwen3_asr_runner():
     assert '$qwenRunner = Join-Path $projectRoot "videocaptioner\\core\\asr\\qwen3_asr_runner.py"' in script
     assert '--add-data "$qwenRunner;videocaptioner\\core\\asr"' in script
     assert "$qwenRunnerBundlePath" in script
+    assert "scripts\\download_firered_vad.py" in script
+    assert '--add-data "$fireredVadModelDir;models\\FireRedVAD"' in script
+    assert "$fireredVadBundlePath" in script

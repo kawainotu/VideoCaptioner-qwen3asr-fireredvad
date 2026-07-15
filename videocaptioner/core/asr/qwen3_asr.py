@@ -17,6 +17,7 @@ from ..utils.logger import setup_logger
 from .asr_data import ASRDataSeg
 from .base import BaseASR
 from .qwen3_runtime import missing_components, runtime_python_path
+from .qwen3_vad_models import get_qwen3_vad_model, resolve_firered_vad_model_path
 
 logger = setup_logger("qwen3_asr")
 
@@ -92,10 +93,20 @@ class Qwen3ASR(BaseASR):
         device: str = "auto",
         low_memory: bool = True,
         vad_filter: bool = True,
+        vad_model: str = "silero",
+        firered_vad_model_dir: Optional[str] = None,
         vad_threshold: float = 0.5,
         vad_min_speech_ms: int = 250,
         vad_min_silence_ms: int = 500,
         vad_speech_pad_ms: int = 300,
+        firered_vad_smooth_window_size: int = 5,
+        firered_vad_speech_threshold: float = 0.4,
+        firered_vad_min_speech_frame: int = 20,
+        firered_vad_max_speech_frame: int = 2000,
+        firered_vad_min_silence_frame: int = 20,
+        firered_vad_merge_silence_frame: int = 0,
+        firered_vad_extend_speech_frame: int = 0,
+        firered_vad_chunk_max_frame: int = 30000,
         prompt: str = "",
         use_cache: bool = False,
         need_word_time_stamp: bool = False,
@@ -110,10 +121,24 @@ class Qwen3ASR(BaseASR):
         self.device = device
         self.low_memory = low_memory
         self.vad_filter = vad_filter
+        self.vad_model = get_qwen3_vad_model(vad_model).key
+        self.firered_vad_model_dir = (
+            Path(firered_vad_model_dir)
+            if firered_vad_model_dir
+            else resolve_firered_vad_model_path()
+        )
         self.vad_threshold = vad_threshold
         self.vad_min_speech_ms = vad_min_speech_ms
         self.vad_min_silence_ms = vad_min_silence_ms
         self.vad_speech_pad_ms = vad_speech_pad_ms
+        self.firered_vad_smooth_window_size = firered_vad_smooth_window_size
+        self.firered_vad_speech_threshold = firered_vad_speech_threshold
+        self.firered_vad_min_speech_frame = firered_vad_min_speech_frame
+        self.firered_vad_max_speech_frame = firered_vad_max_speech_frame
+        self.firered_vad_min_silence_frame = firered_vad_min_silence_frame
+        self.firered_vad_merge_silence_frame = firered_vad_merge_silence_frame
+        self.firered_vad_extend_speech_frame = firered_vad_extend_speech_frame
+        self.firered_vad_chunk_max_frame = firered_vad_chunk_max_frame
         self.prompt = prompt
         self.need_word_time_stamp = need_word_time_stamp
         self.process: Optional[subprocess.Popen[str]] = None
@@ -127,6 +152,8 @@ class Qwen3ASR(BaseASR):
             runtime_dir=self.runtime_python.parent.parent,
             asr_model_dir=self.asr_model_dir,
             aligner_model_dir=self.aligner_model_dir,
+            vad_model_key=self.vad_model if self.vad_filter else None,
+            vad_model_dir=self.firered_vad_model_dir,
         )
         if missing:
             raise EnvironmentError(
@@ -149,6 +176,10 @@ class Qwen3ASR(BaseASR):
             str(self.aligner_model_dir),
             "--device",
             self.device,
+            "--vad-model",
+            self.vad_model,
+            "--firered-vad-model",
+            str(self.firered_vad_model_dir),
             "--vad-threshold",
             str(self.vad_threshold),
             "--vad-min-speech-ms",
@@ -157,6 +188,22 @@ class Qwen3ASR(BaseASR):
             str(self.vad_min_silence_ms),
             "--vad-speech-pad-ms",
             str(self.vad_speech_pad_ms),
+            "--firered-vad-smooth-window-size",
+            str(self.firered_vad_smooth_window_size),
+            "--firered-vad-speech-threshold",
+            str(self.firered_vad_speech_threshold),
+            "--firered-vad-min-speech-frame",
+            str(self.firered_vad_min_speech_frame),
+            "--firered-vad-max-speech-frame",
+            str(self.firered_vad_max_speech_frame),
+            "--firered-vad-min-silence-frame",
+            str(self.firered_vad_min_silence_frame),
+            "--firered-vad-merge-silence-frame",
+            str(self.firered_vad_merge_silence_frame),
+            "--firered-vad-extend-speech-frame",
+            str(self.firered_vad_extend_speech_frame),
+            "--firered-vad-chunk-max-frame",
+            str(self.firered_vad_chunk_max_frame),
         ]
         if self.language:
             command.extend(["--language", self.language])
@@ -208,10 +255,11 @@ class Qwen3ASR(BaseASR):
 
             error_message = ""
             diagnostics: list[str] = []
-            assert self.process.stdout is not None
+            stdout = self.process.stdout
+            assert stdout is not None
             process = self.process
             try:
-                for raw_line in process.stdout:
+                for raw_line in stdout:
                     line = raw_line.strip()
                     if not line:
                         continue
@@ -278,10 +326,22 @@ class Qwen3ASR(BaseASR):
             "device": self.device,
             "low_memory": self.low_memory,
             "vad_filter": self.vad_filter,
+            "vad_model": self.vad_model,
+            "firered_vad_model": str(self.firered_vad_model_dir),
             "vad_threshold": self.vad_threshold,
             "vad_min_speech_ms": self.vad_min_speech_ms,
             "vad_min_silence_ms": self.vad_min_silence_ms,
             "vad_speech_pad_ms": self.vad_speech_pad_ms,
+            "firered_vad_smooth_window_size": self.firered_vad_smooth_window_size,
+            "firered_vad_speech_threshold": self.firered_vad_speech_threshold,
+            "firered_vad_min_speech_frame": self.firered_vad_min_speech_frame,
+            "firered_vad_max_speech_frame": self.firered_vad_max_speech_frame,
+            "firered_vad_min_silence_frame": self.firered_vad_min_silence_frame,
+            "firered_vad_merge_silence_frame": (
+                self.firered_vad_merge_silence_frame
+            ),
+            "firered_vad_extend_speech_frame": self.firered_vad_extend_speech_frame,
+            "firered_vad_chunk_max_frame": self.firered_vad_chunk_max_frame,
             "prompt": self.prompt,
             "word_timestamps": self.need_word_time_stamp,
         }

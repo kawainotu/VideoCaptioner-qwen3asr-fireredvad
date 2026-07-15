@@ -178,10 +178,26 @@ def _create_qwen3_asr(audio_path: str, config: TranscribeConfig) -> Qwen3ASR:
         device=config.qwen_asr_device,
         low_memory=config.qwen_asr_low_memory,
         vad_filter=config.qwen_asr_vad_filter,
+        vad_model=config.qwen_asr_vad_model,
+        firered_vad_model_dir=config.qwen_asr_vad_model_dir,
         vad_threshold=config.qwen_asr_vad_threshold,
         vad_min_speech_ms=config.qwen_asr_vad_min_speech_ms,
         vad_min_silence_ms=config.qwen_asr_vad_min_silence_ms,
         vad_speech_pad_ms=config.qwen_asr_vad_speech_pad_ms,
+        firered_vad_smooth_window_size=(
+            config.qwen_asr_firered_vad_smooth_window_size
+        ),
+        firered_vad_speech_threshold=config.qwen_asr_firered_vad_speech_threshold,
+        firered_vad_min_speech_frame=config.qwen_asr_firered_vad_min_speech_frame,
+        firered_vad_max_speech_frame=config.qwen_asr_firered_vad_max_speech_frame,
+        firered_vad_min_silence_frame=config.qwen_asr_firered_vad_min_silence_frame,
+        firered_vad_merge_silence_frame=(
+            config.qwen_asr_firered_vad_merge_silence_frame
+        ),
+        firered_vad_extend_speech_frame=(
+            config.qwen_asr_firered_vad_extend_speech_frame
+        ),
+        firered_vad_chunk_max_frame=config.qwen_asr_firered_vad_chunk_max_frame,
         prompt=config.qwen_asr_prompt or "",
     )
 

@@ -8,6 +8,7 @@ from videocaptioner.config import (
 )
 from videocaptioner.core.asr.qwen3_models import get_qwen3_asr_model
 from videocaptioner.core.asr.qwen3_runtime import runtime_python_path
+from videocaptioner.core.asr.qwen3_vad_models import resolve_firered_vad_model_path
 from videocaptioner.core.entities import (
     LANGUAGES,
     FullProcessTask,
@@ -105,10 +106,36 @@ class TaskFactory:
             qwen_asr_device=cfg.qwen_asr_device.value,
             qwen_asr_low_memory=cfg.qwen_asr_low_memory.value,
             qwen_asr_vad_filter=cfg.qwen_asr_vad_filter.value,
+            qwen_asr_vad_model=cfg.qwen_asr_vad_model.value,
+            qwen_asr_vad_model_dir=str(resolve_firered_vad_model_path()),
             qwen_asr_vad_threshold=cfg.qwen_asr_vad_threshold.value,
             qwen_asr_vad_min_speech_ms=cfg.qwen_asr_vad_min_speech_ms.value,
             qwen_asr_vad_min_silence_ms=cfg.qwen_asr_vad_min_silence_ms.value,
             qwen_asr_vad_speech_pad_ms=cfg.qwen_asr_vad_speech_pad_ms.value,
+            qwen_asr_firered_vad_smooth_window_size=(
+                cfg.qwen_asr_firered_vad_smooth_window_size.value
+            ),
+            qwen_asr_firered_vad_speech_threshold=(
+                cfg.qwen_asr_firered_vad_speech_threshold.value
+            ),
+            qwen_asr_firered_vad_min_speech_frame=(
+                cfg.qwen_asr_firered_vad_min_speech_frame.value
+            ),
+            qwen_asr_firered_vad_max_speech_frame=(
+                cfg.qwen_asr_firered_vad_max_speech_frame.value
+            ),
+            qwen_asr_firered_vad_min_silence_frame=(
+                cfg.qwen_asr_firered_vad_min_silence_frame.value
+            ),
+            qwen_asr_firered_vad_merge_silence_frame=(
+                cfg.qwen_asr_firered_vad_merge_silence_frame.value
+            ),
+            qwen_asr_firered_vad_extend_speech_frame=(
+                cfg.qwen_asr_firered_vad_extend_speech_frame.value
+            ),
+            qwen_asr_firered_vad_chunk_max_frame=(
+                cfg.qwen_asr_firered_vad_chunk_max_frame.value
+            ),
             qwen_asr_prompt=cfg.qwen_asr_prompt.value,
         )
 

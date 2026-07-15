@@ -23,6 +23,10 @@ from videocaptioner.core.asr.qwen3_models import (
     DEFAULT_QWEN3_ASR_MODEL_KEY,
     QWEN3_ASR_MODELS,
 )
+from videocaptioner.core.asr.qwen3_vad_models import (
+    DEFAULT_QWEN3_VAD_MODEL_KEY,
+    QWEN3_VAD_MODELS,
+)
 from videocaptioner.core.entities import (
     FasterWhisperModelEnum,
     LLMServiceEnum,
@@ -234,6 +238,12 @@ class Config(QConfig):
     qwen_asr_vad_filter = ConfigItem(
         "QwenASR", "VadFilter", True, BoolValidator()
     )
+    qwen_asr_vad_model = OptionsConfigItem(
+        "QwenASR",
+        "VadModel",
+        DEFAULT_QWEN3_VAD_MODEL_KEY,
+        OptionsValidator([model.key for model in QWEN3_VAD_MODELS]),
+    )
     qwen_asr_vad_threshold = RangeConfigItem(
         "QwenASR", "VadThreshold", 0.5, RangeValidator(0, 1)
     )
@@ -245,6 +255,30 @@ class Config(QConfig):
     )
     qwen_asr_vad_speech_pad_ms = RangeConfigItem(
         "QwenASR", "VadSpeechPadMs", 300, RangeValidator(0, 2000)
+    )
+    qwen_asr_firered_vad_smooth_window_size = RangeConfigItem(
+        "QwenASR", "FireRedVadSmoothWindowSize", 5, RangeValidator(1, 101)
+    )
+    qwen_asr_firered_vad_speech_threshold = RangeConfigItem(
+        "QwenASR", "FireRedVadSpeechThreshold", 0.4, RangeValidator(0, 1)
+    )
+    qwen_asr_firered_vad_min_speech_frame = RangeConfigItem(
+        "QwenASR", "FireRedVadMinSpeechFrame", 20, RangeValidator(1, 5000)
+    )
+    qwen_asr_firered_vad_max_speech_frame = RangeConfigItem(
+        "QwenASR", "FireRedVadMaxSpeechFrame", 2000, RangeValidator(1, 30000)
+    )
+    qwen_asr_firered_vad_min_silence_frame = RangeConfigItem(
+        "QwenASR", "FireRedVadMinSilenceFrame", 20, RangeValidator(1, 5000)
+    )
+    qwen_asr_firered_vad_merge_silence_frame = RangeConfigItem(
+        "QwenASR", "FireRedVadMergeSilenceFrame", 0, RangeValidator(0, 5000)
+    )
+    qwen_asr_firered_vad_extend_speech_frame = RangeConfigItem(
+        "QwenASR", "FireRedVadExtendSpeechFrame", 0, RangeValidator(0, 1000)
+    )
+    qwen_asr_firered_vad_chunk_max_frame = RangeConfigItem(
+        "QwenASR", "FireRedVadChunkMaxFrame", 30000, RangeValidator(100, 60000)
     )
     qwen_asr_prompt = ConfigItem("QwenASR", "Prompt", "")
 

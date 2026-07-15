@@ -32,6 +32,18 @@ ALIGNER_LANGUAGES = {
     "Russian",
     "Spanish",
 }
+# Keep in sync with core.qwen3_vad_defaults. This runner is copied into an
+# isolated environment and intentionally cannot import the application package.
+FIRERED_VAD_DEFAULTS = {
+    "smooth_window_size": 5,
+    "speech_threshold": 0.4,
+    "min_speech_frame": 12,
+    "max_speech_frame": 1500,
+    "min_silence_frame": 30,
+    "merge_silence_frame": 50,
+    "extend_speech_frame": 15,
+    "chunk_max_frame": 30000,
+}
 
 
 @dataclass
@@ -427,14 +439,46 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--vad-min-speech-ms", type=int, default=250)
     parser.add_argument("--vad-min-silence-ms", type=int, default=500)
     parser.add_argument("--vad-speech-pad-ms", type=int, default=300)
-    parser.add_argument("--firered-vad-smooth-window-size", type=int, default=5)
-    parser.add_argument("--firered-vad-speech-threshold", type=float, default=0.4)
-    parser.add_argument("--firered-vad-min-speech-frame", type=int, default=20)
-    parser.add_argument("--firered-vad-max-speech-frame", type=int, default=2000)
-    parser.add_argument("--firered-vad-min-silence-frame", type=int, default=20)
-    parser.add_argument("--firered-vad-merge-silence-frame", type=int, default=0)
-    parser.add_argument("--firered-vad-extend-speech-frame", type=int, default=0)
-    parser.add_argument("--firered-vad-chunk-max-frame", type=int, default=30000)
+    parser.add_argument(
+        "--firered-vad-smooth-window-size",
+        type=int,
+        default=FIRERED_VAD_DEFAULTS["smooth_window_size"],
+    )
+    parser.add_argument(
+        "--firered-vad-speech-threshold",
+        type=float,
+        default=FIRERED_VAD_DEFAULTS["speech_threshold"],
+    )
+    parser.add_argument(
+        "--firered-vad-min-speech-frame",
+        type=int,
+        default=FIRERED_VAD_DEFAULTS["min_speech_frame"],
+    )
+    parser.add_argument(
+        "--firered-vad-max-speech-frame",
+        type=int,
+        default=FIRERED_VAD_DEFAULTS["max_speech_frame"],
+    )
+    parser.add_argument(
+        "--firered-vad-min-silence-frame",
+        type=int,
+        default=FIRERED_VAD_DEFAULTS["min_silence_frame"],
+    )
+    parser.add_argument(
+        "--firered-vad-merge-silence-frame",
+        type=int,
+        default=FIRERED_VAD_DEFAULTS["merge_silence_frame"],
+    )
+    parser.add_argument(
+        "--firered-vad-extend-speech-frame",
+        type=int,
+        default=FIRERED_VAD_DEFAULTS["extend_speech_frame"],
+    )
+    parser.add_argument(
+        "--firered-vad-chunk-max-frame",
+        type=int,
+        default=FIRERED_VAD_DEFAULTS["chunk_max_frame"],
+    )
     return parser
 
 

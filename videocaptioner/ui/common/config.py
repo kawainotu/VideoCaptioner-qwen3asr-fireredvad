@@ -40,6 +40,10 @@ from videocaptioner.core.entities import (
     VideoQualityEnum,
     WhisperModelEnum,
 )
+from videocaptioner.core.qwen3_vad_defaults import (
+    FIRERED_VAD_DEFAULTS,
+    LEGACY_FIRERED_VAD_DEFAULTS,
+)
 from videocaptioner.core.translate.types import TargetLanguage
 from videocaptioner.core.utils.platform_utils import get_available_transcribe_models
 
@@ -257,28 +261,52 @@ class Config(QConfig):
         "QwenASR", "VadSpeechPadMs", 300, RangeValidator(0, 2000)
     )
     qwen_asr_firered_vad_smooth_window_size = RangeConfigItem(
-        "QwenASR", "FireRedVadSmoothWindowSize", 5, RangeValidator(1, 101)
+        "QwenASR",
+        "FireRedVadSmoothWindowSize",
+        FIRERED_VAD_DEFAULTS.smooth_window_size,
+        RangeValidator(1, 101),
     )
     qwen_asr_firered_vad_speech_threshold = RangeConfigItem(
-        "QwenASR", "FireRedVadSpeechThreshold", 0.4, RangeValidator(0, 1)
+        "QwenASR",
+        "FireRedVadSpeechThreshold",
+        FIRERED_VAD_DEFAULTS.speech_threshold,
+        RangeValidator(0, 1),
     )
     qwen_asr_firered_vad_min_speech_frame = RangeConfigItem(
-        "QwenASR", "FireRedVadMinSpeechFrame", 20, RangeValidator(1, 5000)
+        "QwenASR",
+        "FireRedVadMinSpeechFrame",
+        FIRERED_VAD_DEFAULTS.min_speech_frame,
+        RangeValidator(1, 5000),
     )
     qwen_asr_firered_vad_max_speech_frame = RangeConfigItem(
-        "QwenASR", "FireRedVadMaxSpeechFrame", 2000, RangeValidator(1, 30000)
+        "QwenASR",
+        "FireRedVadMaxSpeechFrame",
+        FIRERED_VAD_DEFAULTS.max_speech_frame,
+        RangeValidator(1, 30000),
     )
     qwen_asr_firered_vad_min_silence_frame = RangeConfigItem(
-        "QwenASR", "FireRedVadMinSilenceFrame", 20, RangeValidator(1, 5000)
+        "QwenASR",
+        "FireRedVadMinSilenceFrame",
+        FIRERED_VAD_DEFAULTS.min_silence_frame,
+        RangeValidator(1, 5000),
     )
     qwen_asr_firered_vad_merge_silence_frame = RangeConfigItem(
-        "QwenASR", "FireRedVadMergeSilenceFrame", 0, RangeValidator(0, 5000)
+        "QwenASR",
+        "FireRedVadMergeSilenceFrame",
+        FIRERED_VAD_DEFAULTS.merge_silence_frame,
+        RangeValidator(0, 5000),
     )
     qwen_asr_firered_vad_extend_speech_frame = RangeConfigItem(
-        "QwenASR", "FireRedVadExtendSpeechFrame", 0, RangeValidator(0, 1000)
+        "QwenASR",
+        "FireRedVadExtendSpeechFrame",
+        FIRERED_VAD_DEFAULTS.extend_speech_frame,
+        RangeValidator(0, 1000),
     )
     qwen_asr_firered_vad_chunk_max_frame = RangeConfigItem(
-        "QwenASR", "FireRedVadChunkMaxFrame", 30000, RangeValidator(100, 60000)
+        "QwenASR",
+        "FireRedVadChunkMaxFrame",
+        FIRERED_VAD_DEFAULTS.chunk_max_frame,
+        RangeValidator(100, 60000),
     )
     qwen_asr_prompt = ConfigItem("QwenASR", "Prompt", "")
 
@@ -400,3 +428,49 @@ cfg = Config()
 cfg.themeMode.value = Theme.DARK
 cfg.themeColor.value = QColor("#ff28f08b")
 qconfig.load(SETTINGS_PATH, cfg)
+
+_firered_vad_migration = (
+    (
+        cfg.qwen_asr_firered_vad_smooth_window_size,
+        LEGACY_FIRERED_VAD_DEFAULTS.smooth_window_size,
+        FIRERED_VAD_DEFAULTS.smooth_window_size,
+    ),
+    (
+        cfg.qwen_asr_firered_vad_speech_threshold,
+        LEGACY_FIRERED_VAD_DEFAULTS.speech_threshold,
+        FIRERED_VAD_DEFAULTS.speech_threshold,
+    ),
+    (
+        cfg.qwen_asr_firered_vad_min_speech_frame,
+        LEGACY_FIRERED_VAD_DEFAULTS.min_speech_frame,
+        FIRERED_VAD_DEFAULTS.min_speech_frame,
+    ),
+    (
+        cfg.qwen_asr_firered_vad_max_speech_frame,
+        LEGACY_FIRERED_VAD_DEFAULTS.max_speech_frame,
+        FIRERED_VAD_DEFAULTS.max_speech_frame,
+    ),
+    (
+        cfg.qwen_asr_firered_vad_min_silence_frame,
+        LEGACY_FIRERED_VAD_DEFAULTS.min_silence_frame,
+        FIRERED_VAD_DEFAULTS.min_silence_frame,
+    ),
+    (
+        cfg.qwen_asr_firered_vad_merge_silence_frame,
+        LEGACY_FIRERED_VAD_DEFAULTS.merge_silence_frame,
+        FIRERED_VAD_DEFAULTS.merge_silence_frame,
+    ),
+    (
+        cfg.qwen_asr_firered_vad_extend_speech_frame,
+        LEGACY_FIRERED_VAD_DEFAULTS.extend_speech_frame,
+        FIRERED_VAD_DEFAULTS.extend_speech_frame,
+    ),
+    (
+        cfg.qwen_asr_firered_vad_chunk_max_frame,
+        LEGACY_FIRERED_VAD_DEFAULTS.chunk_max_frame,
+        FIRERED_VAD_DEFAULTS.chunk_max_frame,
+    ),
+)
+if all(item.value == old_value for item, old_value, _ in _firered_vad_migration):
+    for item, _, new_value in _firered_vad_migration:
+        cfg.set(item, new_value)

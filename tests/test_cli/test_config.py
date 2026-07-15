@@ -1,5 +1,7 @@
 """Tests for CLI config system — TOML read/write, merging, type safety."""
 
+from dataclasses import asdict
+
 import pytest
 
 from videocaptioner.cli.config import (
@@ -14,6 +16,7 @@ from videocaptioner.cli.config import (
     load_env_overrides,
     save_config_value,
 )
+from videocaptioner.core.qwen3_vad_defaults import FIRERED_VAD_DEFAULTS
 
 
 class TestDeepMerge:
@@ -135,7 +138,9 @@ class TestBuildConfig:
         assert config["transcribe"]["qwen3_asr"]["device"] == "auto"
         assert config["transcribe"]["qwen3_asr"]["low_memory"] is True
         assert config["transcribe"]["qwen3_asr"]["vad_model"] == "silero"
-        assert config["transcribe"]["qwen3_asr"]["firered_vad_speech_threshold"] == 0.4
+        qwen_config = config["transcribe"]["qwen3_asr"]
+        for name, value in asdict(FIRERED_VAD_DEFAULTS).items():
+            assert qwen_config[f"firered_vad_{name}"] == value
 
     def test_cli_overrides(self):
         config = build_config(cli_overrides={"llm": {"model": "custom"}})

@@ -1,4 +1,5 @@
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -8,6 +9,7 @@ from videocaptioner.core.asr.qwen3_asr_runner import (
     AudioChunk,
     TranscribedChunk,
     approximate_segments,
+    build_parser,
     firered_timestamps_to_regions,
     fixed_chunks,
     normalize_language,
@@ -27,6 +29,7 @@ from videocaptioner.core.asr.qwen3_vad_models import (
     get_qwen3_vad_model,
     is_firered_vad_model_ready,
 )
+from videocaptioner.core.qwen3_vad_defaults import FIRERED_VAD_DEFAULTS
 
 
 class TestQwenSegmentGrouping:
@@ -171,6 +174,26 @@ class TestQwenRunnerHelpers:
         assert command[command.index("--vad-model") + 1] == FIRERED_VAD_MODEL_KEY
         assert command[command.index("--firered-vad-model") + 1] == str(model_dir)
         assert command[command.index("--firered-vad-max-speech-frame") + 1] == "2400"
+
+    def test_firered_defaults_stay_in_sync_with_isolated_runner(self):
+        expected = asdict(FIRERED_VAD_DEFAULTS)
+        asr = Qwen3ASR(b"")
+        args = build_parser().parse_args(
+            [
+                "--audio",
+                "audio.wav",
+                "--output",
+                "result.json",
+                "--asr-model",
+                "asr",
+                "--aligner-model",
+                "aligner",
+            ]
+        )
+
+        for name, value in expected.items():
+            assert getattr(asr, f"firered_vad_{name}") == value
+            assert getattr(args, f"firered_vad_{name}") == value
 
 
 class TestQwenRuntimeChecks:

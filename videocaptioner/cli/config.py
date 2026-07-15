@@ -15,6 +15,8 @@ from typing import Any, Dict, Optional
 
 from platformdirs import user_config_dir
 
+from videocaptioner.core.qwen3_vad_defaults import FIRERED_VAD_DEFAULTS
+
 if sys.version_info >= (3, 11):
     import tomllib
 else:
@@ -98,14 +100,14 @@ DEFAULTS: Dict[str, Any] = {
             "vad_min_speech_ms": 250,
             "vad_min_silence_ms": 500,
             "vad_speech_pad_ms": 300,
-            "firered_vad_smooth_window_size": 5,
-            "firered_vad_speech_threshold": 0.4,
-            "firered_vad_min_speech_frame": 20,
-            "firered_vad_max_speech_frame": 2000,
-            "firered_vad_min_silence_frame": 20,
-            "firered_vad_merge_silence_frame": 0,
-            "firered_vad_extend_speech_frame": 0,
-            "firered_vad_chunk_max_frame": 30000,
+            "firered_vad_smooth_window_size": (FIRERED_VAD_DEFAULTS.smooth_window_size),
+            "firered_vad_speech_threshold": FIRERED_VAD_DEFAULTS.speech_threshold,
+            "firered_vad_min_speech_frame": FIRERED_VAD_DEFAULTS.min_speech_frame,
+            "firered_vad_max_speech_frame": FIRERED_VAD_DEFAULTS.max_speech_frame,
+            "firered_vad_min_silence_frame": FIRERED_VAD_DEFAULTS.min_silence_frame,
+            "firered_vad_merge_silence_frame": (FIRERED_VAD_DEFAULTS.merge_silence_frame),
+            "firered_vad_extend_speech_frame": (FIRERED_VAD_DEFAULTS.extend_speech_frame),
+            "firered_vad_chunk_max_frame": FIRERED_VAD_DEFAULTS.chunk_max_frame,
             "prompt": "",
         },
     },

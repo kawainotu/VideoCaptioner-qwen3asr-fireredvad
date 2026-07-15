@@ -77,6 +77,7 @@ def run(args: Namespace, config: dict) -> int:
         VadMethodEnum,
         WhisperModelEnum,
     )
+    from videocaptioner.core.qwen3_vad_defaults import FIRERED_VAD_DEFAULTS
 
     asr_map = {
         "faster-whisper": TranscribeModelEnum.FASTER_WHISPER,
@@ -127,28 +128,44 @@ def run(args: Namespace, config: dict) -> int:
         qwen_asr_vad_min_silence_ms=get(config, "transcribe.qwen3_asr.vad_min_silence_ms", 500),
         qwen_asr_vad_speech_pad_ms=get(config, "transcribe.qwen3_asr.vad_speech_pad_ms", 300),
         qwen_asr_firered_vad_smooth_window_size=get(
-            config, "transcribe.qwen3_asr.firered_vad_smooth_window_size", 5
+            config,
+            "transcribe.qwen3_asr.firered_vad_smooth_window_size",
+            FIRERED_VAD_DEFAULTS.smooth_window_size,
         ),
         qwen_asr_firered_vad_speech_threshold=get(
-            config, "transcribe.qwen3_asr.firered_vad_speech_threshold", 0.4
+            config,
+            "transcribe.qwen3_asr.firered_vad_speech_threshold",
+            FIRERED_VAD_DEFAULTS.speech_threshold,
         ),
         qwen_asr_firered_vad_min_speech_frame=get(
-            config, "transcribe.qwen3_asr.firered_vad_min_speech_frame", 20
+            config,
+            "transcribe.qwen3_asr.firered_vad_min_speech_frame",
+            FIRERED_VAD_DEFAULTS.min_speech_frame,
         ),
         qwen_asr_firered_vad_max_speech_frame=get(
-            config, "transcribe.qwen3_asr.firered_vad_max_speech_frame", 2000
+            config,
+            "transcribe.qwen3_asr.firered_vad_max_speech_frame",
+            FIRERED_VAD_DEFAULTS.max_speech_frame,
         ),
         qwen_asr_firered_vad_min_silence_frame=get(
-            config, "transcribe.qwen3_asr.firered_vad_min_silence_frame", 20
+            config,
+            "transcribe.qwen3_asr.firered_vad_min_silence_frame",
+            FIRERED_VAD_DEFAULTS.min_silence_frame,
         ),
         qwen_asr_firered_vad_merge_silence_frame=get(
-            config, "transcribe.qwen3_asr.firered_vad_merge_silence_frame", 0
+            config,
+            "transcribe.qwen3_asr.firered_vad_merge_silence_frame",
+            FIRERED_VAD_DEFAULTS.merge_silence_frame,
         ),
         qwen_asr_firered_vad_extend_speech_frame=get(
-            config, "transcribe.qwen3_asr.firered_vad_extend_speech_frame", 0
+            config,
+            "transcribe.qwen3_asr.firered_vad_extend_speech_frame",
+            FIRERED_VAD_DEFAULTS.extend_speech_frame,
         ),
         qwen_asr_firered_vad_chunk_max_frame=get(
-            config, "transcribe.qwen3_asr.firered_vad_chunk_max_frame", 30000
+            config,
+            "transcribe.qwen3_asr.firered_vad_chunk_max_frame",
+            FIRERED_VAD_DEFAULTS.chunk_max_frame,
         ),
         qwen_asr_prompt=get(config, "transcribe.qwen3_asr.prompt", ""),
         # WhisperCpp options

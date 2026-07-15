@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Literal, Optional
 
+from .qwen3_vad_defaults import FIRERED_VAD_DEFAULTS
+
 if TYPE_CHECKING:
     from videocaptioner.core.translate.types import TargetLanguage
 
@@ -587,14 +589,14 @@ class TranscribeConfig:
     qwen_asr_vad_min_speech_ms: int = 250
     qwen_asr_vad_min_silence_ms: int = 500
     qwen_asr_vad_speech_pad_ms: int = 300
-    qwen_asr_firered_vad_smooth_window_size: int = 5
-    qwen_asr_firered_vad_speech_threshold: float = 0.4
-    qwen_asr_firered_vad_min_speech_frame: int = 20
-    qwen_asr_firered_vad_max_speech_frame: int = 2000
-    qwen_asr_firered_vad_min_silence_frame: int = 20
-    qwen_asr_firered_vad_merge_silence_frame: int = 0
-    qwen_asr_firered_vad_extend_speech_frame: int = 0
-    qwen_asr_firered_vad_chunk_max_frame: int = 30000
+    qwen_asr_firered_vad_smooth_window_size: int = FIRERED_VAD_DEFAULTS.smooth_window_size
+    qwen_asr_firered_vad_speech_threshold: float = FIRERED_VAD_DEFAULTS.speech_threshold
+    qwen_asr_firered_vad_min_speech_frame: int = FIRERED_VAD_DEFAULTS.min_speech_frame
+    qwen_asr_firered_vad_max_speech_frame: int = FIRERED_VAD_DEFAULTS.max_speech_frame
+    qwen_asr_firered_vad_min_silence_frame: int = FIRERED_VAD_DEFAULTS.min_silence_frame
+    qwen_asr_firered_vad_merge_silence_frame: int = FIRERED_VAD_DEFAULTS.merge_silence_frame
+    qwen_asr_firered_vad_extend_speech_frame: int = FIRERED_VAD_DEFAULTS.extend_speech_frame
+    qwen_asr_firered_vad_chunk_max_frame: int = FIRERED_VAD_DEFAULTS.chunk_max_frame
     qwen_asr_prompt: Optional[str] = None
 
     def _mask_key(self, key: Optional[str]) -> str:

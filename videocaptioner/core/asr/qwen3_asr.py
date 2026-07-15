@@ -13,6 +13,7 @@ from videocaptioner.config import (
     QWEN3_ASR_MODEL_PATH,
 )
 
+from ..qwen3_vad_defaults import FIRERED_VAD_DEFAULTS
 from ..utils.logger import setup_logger
 from .asr_data import ASRDataSeg
 from .base import BaseASR
@@ -99,14 +100,14 @@ class Qwen3ASR(BaseASR):
         vad_min_speech_ms: int = 250,
         vad_min_silence_ms: int = 500,
         vad_speech_pad_ms: int = 300,
-        firered_vad_smooth_window_size: int = 5,
-        firered_vad_speech_threshold: float = 0.4,
-        firered_vad_min_speech_frame: int = 20,
-        firered_vad_max_speech_frame: int = 2000,
-        firered_vad_min_silence_frame: int = 20,
-        firered_vad_merge_silence_frame: int = 0,
-        firered_vad_extend_speech_frame: int = 0,
-        firered_vad_chunk_max_frame: int = 30000,
+        firered_vad_smooth_window_size: int = (FIRERED_VAD_DEFAULTS.smooth_window_size),
+        firered_vad_speech_threshold: float = FIRERED_VAD_DEFAULTS.speech_threshold,
+        firered_vad_min_speech_frame: int = FIRERED_VAD_DEFAULTS.min_speech_frame,
+        firered_vad_max_speech_frame: int = FIRERED_VAD_DEFAULTS.max_speech_frame,
+        firered_vad_min_silence_frame: int = FIRERED_VAD_DEFAULTS.min_silence_frame,
+        firered_vad_merge_silence_frame: int = (FIRERED_VAD_DEFAULTS.merge_silence_frame),
+        firered_vad_extend_speech_frame: int = (FIRERED_VAD_DEFAULTS.extend_speech_frame),
+        firered_vad_chunk_max_frame: int = FIRERED_VAD_DEFAULTS.chunk_max_frame,
         prompt: str = "",
         use_cache: bool = False,
         need_word_time_stamp: bool = False,

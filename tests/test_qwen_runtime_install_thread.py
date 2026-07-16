@@ -17,6 +17,21 @@ def test_frozen_bootstrap_uses_supported_system_python(monkeypatch, tmp_path):
     assert runtime._bootstrap_python() == supported_python
 
 
+def test_frozen_bootstrap_prefers_bundled_python(monkeypatch, tmp_path):
+    runtime = QwenRuntimeInstallThread(tmp_path / "runtime")
+    bundled_python = tmp_path / "qwen-python" / "python.exe"
+    bundled_python.parent.mkdir()
+    bundled_python.touch()
+
+    monkeypatch.setattr(runtime_install_module.sys, "frozen", True, raising=False)
+    monkeypatch.delenv("VIDEOCAPTIONER_QWEN_PYTHON", raising=False)
+    monkeypatch.setattr(runtime_install_module, "BUNDLED_QWEN_PYTHON_PATH", bundled_python)
+    monkeypatch.setattr(runtime, "_is_supported_python", lambda candidate: candidate == str(bundled_python))
+    monkeypatch.setattr(runtime, "_find_supported_system_python", lambda: pytest.fail("unexpected lookup"))
+
+    assert runtime._bootstrap_python() == str(bundled_python)
+
+
 def test_frozen_bootstrap_rejects_python_314_from_override(monkeypatch, tmp_path):
     runtime = QwenRuntimeInstallThread(tmp_path / "runtime")
     python = tmp_path / "python.exe"

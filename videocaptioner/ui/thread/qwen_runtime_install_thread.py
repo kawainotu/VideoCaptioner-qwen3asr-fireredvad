@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PyQt5.QtCore import QThread, pyqtSignal
 
-from videocaptioner.config import QWEN3_ASR_RUNTIME_PATH
+from videocaptioner.config import BUNDLED_QWEN_PYTHON_PATH, QWEN3_ASR_RUNTIME_PATH
 from videocaptioner.core.asr.qwen3_runtime import (
     FIRERED_VAD_PACKAGE,
     QWEN_ASR_PACKAGE,
@@ -153,6 +153,13 @@ class QwenRuntimeInstallThread(QThread):
                 return candidate
         return None
 
+    def _bundled_python(self) -> str | None:
+        """Return the CPython interpreter shipped by the Windows installer."""
+        bundled_python = BUNDLED_QWEN_PYTHON_PATH
+        if bundled_python.is_file() and self._is_supported_python(str(bundled_python)):
+            return str(bundled_python)
+        return None
+
     def _bootstrap_python(self) -> str:
         if not getattr(sys, "frozen", False):
             if self._is_supported_python(sys.executable):
@@ -178,12 +185,17 @@ class QwenRuntimeInstallThread(QThread):
                 f"Qwen3-ASR with FireRedVAD requires {_SUPPORTED_PYTHON_TEXT}."
             )
 
+        bundled_python = self._bundled_python()
+        if bundled_python:
+            return bundled_python
+
         system_python = self._find_supported_system_python()
         if system_python:
             return system_python
         raise RuntimeError(
             f"Qwen3-ASR with FireRedVAD requires {_SUPPORTED_PYTHON_TEXT}. "
-            "Install one of these versions or set VIDEOCAPTIONER_QWEN_PYTHON."
+            "Reinstall the latest Windows package, install one of these versions, or set "
+            "VIDEOCAPTIONER_QWEN_PYTHON."
         )
 
     def _ensure_runtime_python(self) -> str:

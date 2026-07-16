@@ -13,6 +13,8 @@ $qwenRunnerBundlePath = Join-Path $projectRoot "dist\VideoCaptioner\_internal\vi
 $fireredVadModelDir = Join-Path $projectRoot "build\fireredvad-model"
 $fireredVadWeights = Join-Path $fireredVadModelDir "VAD\model.pth.tar"
 $fireredVadBundlePath = Join-Path $projectRoot "dist\VideoCaptioner\_internal\models\FireRedVAD\VAD\model.pth.tar"
+$bundledQwenPythonDir = Join-Path $projectRoot "dist\VideoCaptioner\_internal\qwen-python"
+$bundledQwenPython = Join-Path $bundledQwenPythonDir "python.exe"
 $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
 if (-not $iscc) {
     $innoCandidates = @(
@@ -28,6 +30,20 @@ if (-not (Test-Path $python)) {
 }
 if (-not (Test-Path $qwenRunner)) {
     throw "Qwen3-ASR runner not found in source tree: $qwenRunner"
+}
+
+$pythonMetadata = @(& $python -c "import sys; print(sys.base_prefix); print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+if ($LASTEXITCODE -ne 0 -or $pythonMetadata.Count -ne 2) {
+    throw "Could not determine the base Python distribution used by $python"
+}
+$basePythonDir = $pythonMetadata[0].Trim()
+$basePythonVersion = $pythonMetadata[1].Trim()
+$basePythonExe = Join-Path $basePythonDir "python.exe"
+if ($basePythonVersion -notin @("3.10", "3.11", "3.12")) {
+    throw "The installer must be built with Python 3.10, 3.11, or 3.12; found $basePythonVersion"
+}
+if (-not (Test-Path $basePythonExe)) {
+    throw "Base Python executable not found: $basePythonExe"
 }
 
 if (-not (Test-Path $fireredVadWeights)) {
@@ -81,6 +97,19 @@ try {
     }
     if (-not (Test-Path $fireredVadBundlePath)) {
         throw "PyInstaller did not bundle FireRedVAD: $fireredVadBundlePath"
+    }
+    if (Test-Path $bundledQwenPythonDir) {
+        throw "PyInstaller output unexpectedly contains the bundled Qwen Python directory: $bundledQwenPythonDir"
+    }
+
+    New-Item -ItemType Directory -Path $bundledQwenPythonDir | Out-Null
+    Copy-Item -Path (Join-Path $basePythonDir "*") -Destination $bundledQwenPythonDir -Recurse -Force
+    if (-not (Test-Path $bundledQwenPython)) {
+        throw "Bundled Qwen Python executable was not copied: $bundledQwenPython"
+    }
+    & $bundledQwenPython -c "import ensurepip, sys, venv; assert sys.version_info[:2] in ((3, 10), (3, 11), (3, 12)); print(sys.executable)"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Bundled Qwen Python is not a usable compatible CPython runtime."
     }
 
     if (-not $iscc) {

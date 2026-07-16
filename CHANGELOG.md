@@ -1,6 +1,6 @@
 # 更新说明
 
-## v1.4.2-qwen3-asr-fireredvad
+## v1.4.2-qwen3-asr-fireredvad-1.1
 
 ### 新增
 

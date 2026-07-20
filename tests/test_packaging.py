@@ -29,7 +29,7 @@ def test_installer_filename_includes_platform_version_and_bundled_features():
     installer_script = (PROJECT_ROOT / "installer" / "VideoCaptioner.iss").read_text(encoding="utf-8")
 
     assert '#define MyAppArchitecture "win64"' in installer_script
-    assert '#define MyAppFeatures "qwen3-asr-fireredvad-1.1"' in installer_script
+    assert '#define MyAppFeatures "qwen3-asr-fireredvad-1.2"' in installer_script
     assert (
         "OutputBaseFilename={#MyAppName}-Setup-{#MyAppArchitecture}-v{#MyAppVersion}-{#MyAppFeatures}"
         in installer_script

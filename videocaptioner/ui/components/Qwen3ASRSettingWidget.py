@@ -578,10 +578,11 @@ class Qwen3ASRSettingWidget(QWidget):
             card.spinBox.setSuffix(" 帧")
 
         self.other_group = SettingCardGroup(self.tr("其他设置"), self)
-        self.timestamp_card = SettingCard(
+        self.timestamp_card = SwitchSettingCard(
             FIF.UNIT,
             self.tr("字词级时间戳"),
-            self.tr("由 Qwen3-ForcedAligner 自动生成"),
+            self.tr("开启后，语音转录页面会在输入文件同目录导出字词级字幕"),
+            cfg.qwen_asr_word_timestamps,
             self.other_group,
         )
         self.prompt_card = LineEditSettingCard(

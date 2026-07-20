@@ -18,6 +18,7 @@ from videocaptioner.core.entities import (
     SynthesisConfig,
     SynthesisTask,
     TranscribeConfig,
+    TranscribeModelEnum,
     TranscribeTask,
     TranscriptAndSubtitleTask,
 )
@@ -73,7 +74,10 @@ class TaskFactory:
                 / f"【原始字幕】{file_name}-{cfg.transcribe_model.value.value}-{cfg.transcribe_language.value.value}.srt"
             )
         else:
-            need_word_time_stamp = False
+            need_word_time_stamp = (
+                cfg.transcribe_model.value == TranscribeModelEnum.QWEN3_ASR
+                and cfg.qwen_asr_word_timestamps.value
+            )
             output_path = str(Path(file_path).parent / f"{file_name}.srt")
 
         config = TranscribeConfig(

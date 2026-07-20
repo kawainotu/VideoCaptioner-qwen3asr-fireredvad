@@ -239,6 +239,9 @@ class Config(QConfig):
     qwen_asr_low_memory = ConfigItem(
         "QwenASR", "LowMemory", True, BoolValidator()
     )
+    qwen_asr_word_timestamps = ConfigItem(
+        "QwenASR", "WordTimestamps", False, BoolValidator()
+    )
     qwen_asr_vad_filter = ConfigItem(
         "QwenASR", "VadFilter", True, BoolValidator()
     )

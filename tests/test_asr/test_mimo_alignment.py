@@ -325,3 +325,118 @@ def test_real_repeated_fixture_pause_and_short_cues_if_ready():
     for original, cue in zip(segments, result):
         assert original["start"] <= cue.start_time < cue.end_time <= original["end"]
     assert all(a.end_time < b.start_time for a, b in zip(result, result[1:]))
+
+
+@pytest.mark.parametrize("text,start,end", [("好。", 2261340, 2263220), ("嗯。", 4018050, 4018670)])
+def test_authorized_short_reply_uses_original_vad_sentence_boundaries(
+    monkeypatch, text, start, end
+):
+    import copy
+
+    item = {
+        "text": text,
+        "start": start,
+        "end": end,
+        "tokens": [{"text": text[0], "start": 0, "end": 0}],
+    }
+    before = copy.deepcopy(item)
+    logger = MagicMock()
+    monkeypatch.setattr(alignment, "logger", logger)
+    result = alignment.validate_aligned_segments([item], [item], allow_vad_fallback=True)
+    assert [(s.text, s.start_time, s.end_time) for s in result] == [(text, start, end)]
+    assert result[0].timing_source == "vad_sentence"
+    assert result[0].needs_review is True
+    assert result[0].source_segment_index == 1
+    assert item == before  # Tokens remain all zero; no fabricated word spans.
+    assert logger.warning.call_count == 2
+    assert logger.warning.call_args_list[0].args[1:] == (1, start, end)
+    assert "需复核" in logger.warning.call_args_list[0].args[0]
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda x: x.update(
+            text="这不是短应答", tokens=[{"text": "这不是短应答", "start": 0, "end": 0}]
+        ),
+        lambda x: x.update(end=x["start"] + 3001),
+        lambda x: x.update(start=-1),
+        lambda x: x.update(end=x["start"]),
+        lambda x: x.update(tokens=[]),
+        lambda x: x["tokens"][0].update(text="漏字"),
+        lambda x: x["tokens"][0].update(start=float("nan"), end=float("nan")),
+        lambda x: x["tokens"][0].update(start=float("inf"), end=float("inf")),
+        lambda x: x["tokens"][0].update(start=-1, end=-1),
+        lambda x: x["tokens"][0].update(start=4, end=4),
+        lambda x: x["tokens"][0].update(start=0.4, end=0.1),
+    ],
+)
+def test_vad_sentence_fallback_never_hides_invalid_or_incomplete_alignment(mutate):
+    item = {
+        "text": "嗯。",
+        "start": 1000,
+        "end": 2000,
+        "tokens": [{"text": "嗯", "start": 0, "end": 0}],
+    }
+    mutate(item)
+    with pytest.raises(ValueError):
+        alignment.validate_aligned_segments([item], [item], allow_vad_fallback=True)
+
+
+def test_vad_disabled_short_reply_still_fails_strictly():
+    item = {
+        "text": "嗯。",
+        "start": 1000,
+        "end": 2000,
+        "tokens": [{"text": "嗯", "start": 0, "end": 0}],
+    }
+    with pytest.raises(ValueError, match="没有有效字词时间"):
+        alignment.validate_aligned_segments([item], [item])
+
+
+def test_vad_fallback_preserves_neighbors_and_silence_without_merging():
+    first = record("前句。", start=1000)
+    last = record("后句。", start=10000)
+    short = {
+        "text": "好。",
+        "start": 5000,
+        "end": 6880,
+        "tokens": [{"text": "好", "start": 0, "end": 0}],
+    }
+    originals = [first, short, last]
+    result = alignment.validate_aligned_segments(originals, originals, allow_vad_fallback=True)
+    assert "".join(s.text for s in result) == "前句。好。后句。"
+    assert result[0].end_time < result[1].start_time < result[1].end_time < result[2].start_time
+    assert (result[1].start_time, result[1].end_time) == (5000, 6880)
+    assert not hasattr(result[0], "needs_review")
+    with pytest.raises(ValueError, match="缺少原始片段"):
+        alignment.validate_aligned_segments(originals, [first, last], allow_vad_fallback=True)
+    with pytest.raises(ValueError, match="不一致"):
+        alignment.validate_aligned_segments(
+            originals, [last, short, first], allow_vad_fallback=True
+        )
+
+
+@pytest.mark.parametrize("vad_filter", [True, False])
+def test_mimo_vad_flag_controls_sentence_fallback(monkeypatch, vad_filter):
+    from videocaptioner.core.asr import mimo_asr
+
+    aligner = MagicMock(return_value=[])
+    monkeypatch.setattr(mimo_asr, "align_mimo_segments", aligner)
+    asr = MiMoASR(
+        generate_tiny_probe_wav(), "fake-key", "https://service.test/v1", vad_filter=vad_filter
+    )
+    asr._make_segments({"segments": [{"text": "好。", "start": 0, "end": 100}]})
+    assert aligner.call_args.kwargs["allow_vad_fallback"] is vad_filter
+
+
+def test_partial_zero_alignment_keeps_existing_word_timing():
+    item = {
+        "text": "你好。",
+        "start": 1000,
+        "end": 2000,
+        "tokens": [{"text": "你", "start": 0, "end": 0}, {"text": "好", "start": 0.1, "end": 0.4}],
+    }
+    result = alignment.validate_aligned_segments([item], [item], allow_vad_fallback=True)
+    assert [(s.text, s.start_time, s.end_time) for s in result] == [("你好。", 1100, 1400)]
+    assert not hasattr(result[0], "needs_review")

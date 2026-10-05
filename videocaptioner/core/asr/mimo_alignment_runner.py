@@ -5,7 +5,7 @@ import json
 import sys
 
 
-def align_manifest(manifest, model_dir, device="auto"):
+def align_manifest(manifest, model_dir, device="auto", on_segment=None):
     import soundfile as sf
     import torch
     from qwen_asr import Qwen3ForcedAligner
@@ -45,6 +45,8 @@ def align_manifest(manifest, model_dir, device="auto"):
                 ],
             }
         )
+        if on_segment:
+            on_segment(index, output[-1])
         print(json.dumps({"progress": index + 1, "total": len(manifest["segments"])}), flush=True)
     return output
 

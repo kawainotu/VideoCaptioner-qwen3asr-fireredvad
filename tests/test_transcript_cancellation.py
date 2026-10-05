@@ -78,6 +78,29 @@ class TranscriptCancellationTests(unittest.TestCase):
             self.assertFalse(output.exists())
             self.assertIsNone(thread._asr)
 
+    def test_failure_error_is_last_so_ui_keeps_retry_state(self):
+        thread = self.make_thread()
+        events = []
+        state = {"button": "正在转录", "enabled": False}
+
+        def on_progress(value, message):
+            events.append(("progress", value))
+            state["button"] = "正在转录"
+
+        def on_error(message):
+            events.append(("error", message))
+            state.update(button="重新转录", enabled=True)
+
+        thread.progress.connect(on_progress)
+        thread.error.connect(on_error)
+        finished = Mock()
+        thread.finished.connect(finished)
+        with patch.object(thread, "_validate_task", side_effect=ValueError("alignment failed")):
+            thread.run()
+        self.assertEqual(events, [("progress", 100), ("error", "alignment failed")])
+        self.assertEqual(state, {"button": "重新转录", "enabled": True})
+        finished.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -91,8 +91,9 @@ class TranscriptThread(QThread):
             if self._cancelled.is_set():
                 return
             logger.exception("转录过程中发生错误: %s", str(e))
-            self.error.emit(str(e))
             self.progress.emit(100, self.tr("转录失败"))
+            # Deliver the terminal error last so progress cannot restore a running button.
+            self.error.emit(str(e))
         finally:
             self._asr = None
 

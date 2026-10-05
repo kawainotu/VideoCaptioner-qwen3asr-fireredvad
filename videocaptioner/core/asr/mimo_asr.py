@@ -436,4 +436,5 @@ class MiMoASR(BaseASR):
             cancelled=lambda: self._is_canceled,
             on_progress=self._alignment_callback,
             on_process=self._register_alignment_process,
+            allow_vad_fallback=self.vad_filter,
         )

@@ -15,8 +15,10 @@ from pydub import AudioSegment
 from videocaptioner.config import QWEN3_ALIGNER_MODEL_PATH
 from videocaptioner.core.asr.asr_data import ASRDataSeg
 from videocaptioner.core.asr.qwen3_runtime import is_model_ready, runtime_python_path
+from videocaptioner.core.utils.logger import setup_logger
 
 RUNNER = Path(__file__).with_name("mimo_alignment_runner.py")
+logger = setup_logger("mimo_alignment")
 
 
 def check_mimo_alignment_environment(model_dir=None, runtime_python=None, device="auto"):
@@ -180,6 +182,7 @@ def align_mimo_segments(
     cancelled=lambda: False,
     on_progress=None,
     on_process=None,
+    allow_vad_fallback=False,
 ):
     if not segments:
         return []
@@ -283,14 +286,63 @@ def align_mimo_segments(
                 if on_process:
                     on_process(None)
         aligned = json.loads((directory / "aligned.json").read_text(encoding="utf-8"))
-        if len(aligned) != len(segments):
-            raise ValueError("MiMo 对齐结果缺少原始片段")
-        output = []
-        for original, item in zip(segments, aligned):
-            if any(item.get(key) != original.get(key) for key in ("text", "start", "end")):
-                raise ValueError("MiMo 对齐结果与原始片段不一致")
+        return validate_aligned_segments(segments, aligned, allow_vad_fallback=allow_vad_fallback)
+
+
+def _can_use_vad_sentence_timing(item):
+    """Only a complete, finite all-zero alignment of a brief utterance qualifies."""
+    cleaned = _clean(item["text"])
+    duration = item["end"] - item["start"]
+    tokens = item["tokens"]
+    if not (0 < len(cleaned) <= 4 and 0 < duration <= 3000 and tokens):
+        return False
+    if "".join(_clean(token["text"]) for token in tokens) != cleaned:
+        return False
+    try:
+        spans = [(float(token["start"]), float(token["end"])) for token in tokens]
+    except (ValueError, TypeError):
+        return False
+    return all(
+        math.isfinite(start) and math.isfinite(end) and 0 <= start == end <= duration / 1000
+        for start, end in spans
+    )
+
+
+def validate_aligned_segments(segments, aligned, allow_vad_fallback=False):
+    """Validate unchanged original records; keep authorized VAD sentence timing explicit."""
+    if len(aligned) != len(segments):
+        raise ValueError("MiMo 对齐结果缺少原始片段")
+    output, review_count = [], 0
+    for index, (original, item) in enumerate(zip(segments, aligned), 1):
+        if any(item.get(key) != original.get(key) for key in ("text", "start", "end")):
+            raise ValueError("MiMo 对齐结果与原始片段不一致")
+        try:
             group = group_aligned_segment(item)
-            if output and group[0].start_time < output[-1].end_time:
-                raise ValueError("MiMo 对齐字幕时间重叠")
-            output.extend(group)
-        return output
+        except ValueError as error:
+            if (
+                not allow_vad_fallback
+                or item["start"] < 0
+                or not _can_use_vad_sentence_timing(item)
+            ):
+                raise ValueError(f"原始片段 {index}：{error}") from None
+            cue = ASRDataSeg(item["text"], item["start"], item["end"])
+            # These are measured speech-region boundaries, never word timestamps.
+            cue.timing_source = "vad_sentence"
+            cue.needs_review = True
+            cue.source_segment_index = index
+            group = [cue]
+            review_count += 1
+            logger.warning(
+                "MiMo 原始片段 %d [%d–%d ms] 字词对齐为零时长，保留 VAD 句级语音起止时间；需复核。",
+                index,
+                item["start"],
+                item["end"],
+            )
+        if output and group[0].start_time < output[-1].end_time:
+            raise ValueError("MiMo 对齐字幕时间重叠")
+        output.extend(group)
+    if review_count:
+        logger.warning(
+            "MiMo 共 %d 个短应答使用 VAD 句级时间，需复核；未生成字词时间。", review_count
+        )
+    return output

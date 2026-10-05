@@ -64,8 +64,23 @@ class TaskFactory:
         # 获取文件名
         file_name = Path(file_path).stem
 
-        # 构建输出路径
-        if need_next_task:
+        # 构建输出路径与语言代码
+        is_mimo = cfg.transcribe_model.value == TranscribeModelEnum.MIMO_ASR
+        if is_mimo:
+            need_word_time_stamp = False
+            trans_lang = cfg.mimo_transcribe_language.value.to_api_code()
+            lang_label = cfg.mimo_transcribe_language.value.value
+            if need_next_task:
+                output_path = str(
+                    Path(cfg.work_dir.value)
+                    / file_name
+                    / "subtitle"
+                    / f"【原始字幕】{file_name}-{cfg.transcribe_model.value.value}-{lang_label}.srt"
+                )
+            else:
+                output_path = str(Path(file_path).parent / f"{file_name}.srt")
+        elif need_next_task:
+            trans_lang = LANGUAGES[cfg.transcribe_language.value.value]
             need_word_time_stamp = cfg.need_split.value
             output_path = str(
                 Path(cfg.work_dir.value)
@@ -74,6 +89,7 @@ class TaskFactory:
                 / f"【原始字幕】{file_name}-{cfg.transcribe_model.value.value}-{cfg.transcribe_language.value.value}.srt"
             )
         else:
+            trans_lang = LANGUAGES[cfg.transcribe_language.value.value]
             need_word_time_stamp = (
                 cfg.transcribe_model.value == TranscribeModelEnum.QWEN3_ASR
                 and cfg.qwen_asr_word_timestamps.value
@@ -82,7 +98,7 @@ class TaskFactory:
 
         config = TranscribeConfig(
             transcribe_model=cfg.transcribe_model.value,
-            transcribe_language=LANGUAGES[cfg.transcribe_language.value.value],
+            transcribe_language=trans_lang,
             need_word_time_stamp=need_word_time_stamp,
             output_format=cfg.transcribe_output_format.value,
             # Whisper Cpp 配置
@@ -92,6 +108,47 @@ class TaskFactory:
             whisper_api_base=cfg.whisper_api_base.value,
             whisper_api_model=cfg.whisper_api_model.value,
             whisper_api_prompt=cfg.whisper_api_prompt.value,
+            # MiMo-ASR 配置
+            mimo_api_key=cfg.mimo_api_key.value,
+            mimo_api_base=cfg.mimo_api_base.value,
+            mimo_api_model=cfg.mimo_api_model.value,
+            mimo_rpm=cfg.mimo_rpm.value,
+            mimo_tpm=cfg.mimo_tpm.value,
+            mimo_aligner_model_dir=str(QWEN3_ALIGNER_MODEL_PATH),
+            mimo_aligner_runtime_python=str(runtime_python_path()),
+            mimo_aligner_device=cfg.mimo_aligner_device.value,
+            mimo_vad_filter=cfg.mimo_vad_filter.value,
+            mimo_vad_model=cfg.mimo_vad_model.value,
+            mimo_vad_model_dir=str(resolve_firered_vad_model_path()),
+            mimo_vad_threshold=cfg.mimo_vad_threshold.value,
+            mimo_vad_min_speech_ms=cfg.mimo_vad_min_speech_ms.value,
+            mimo_vad_min_silence_ms=cfg.mimo_vad_min_silence_ms.value,
+            mimo_vad_speech_pad_ms=cfg.mimo_vad_speech_pad_ms.value,
+            mimo_firered_vad_smooth_window_size=(
+                cfg.mimo_firered_vad_smooth_window_size.value
+            ),
+            mimo_firered_vad_speech_threshold=(
+                cfg.mimo_firered_vad_speech_threshold.value
+            ),
+            mimo_firered_vad_min_speech_frame=(
+                cfg.mimo_firered_vad_min_speech_frame.value
+            ),
+            mimo_firered_vad_max_speech_frame=(
+                cfg.mimo_firered_vad_max_speech_frame.value
+            ),
+            mimo_firered_vad_min_silence_frame=(
+                cfg.mimo_firered_vad_min_silence_frame.value
+            ),
+            mimo_firered_vad_merge_silence_frame=(
+                cfg.mimo_firered_vad_merge_silence_frame.value
+            ),
+            mimo_firered_vad_extend_speech_frame=(
+                cfg.mimo_firered_vad_extend_speech_frame.value
+            ),
+            mimo_firered_vad_chunk_max_frame=(
+                cfg.mimo_firered_vad_chunk_max_frame.value
+            ),
+
             # Faster Whisper 配置
             faster_whisper_program=cfg.faster_whisper_program.value,
             faster_whisper_model=cfg.faster_whisper_model.value,

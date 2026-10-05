@@ -1,8 +1,9 @@
 import webbrowser
+from typing import Optional
 
 from PyQt5.QtCore import Qt, QThread, QUrl, pyqtSignal
 from PyQt5.QtGui import QDesktopServices
-from PyQt5.QtWidgets import QFileDialog, QLabel, QWidget
+from PyQt5.QtWidgets import QFileDialog, QLabel, QLineEdit, QWidget
 from qfluentwidgets import (
     ComboBoxSettingCard,
     CustomColorSettingCard,
@@ -35,6 +36,13 @@ from videocaptioner.ui.common.config import cfg
 from videocaptioner.ui.common.signal_bus import signalBus
 from videocaptioner.ui.components.EditComboBoxSettingCard import EditComboBoxSettingCard
 from videocaptioner.ui.components.LineEditSettingCard import LineEditSettingCard
+from videocaptioner.ui.components.MiMoASRSettingWidget import (
+    _ACTIVE_MIMO_WORKERS,
+    MiMoConnectionThread,
+)
+from videocaptioner.ui.components.MiMoRateSettingWidget import MiMoRateSettingWidget
+from videocaptioner.ui.components.MiMoVADSettingWidget import MiMoVADSettingWidget
+from videocaptioner.ui.components.MiMoAlignmentSettingWidget import MiMoAlignmentSettingWidget
 
 
 class SettingInterface(ScrollArea):
@@ -46,6 +54,8 @@ class SettingInterface(ScrollArea):
         self.scrollWidget = QWidget()
         self.expandLayout = ExpandLayout(self.scrollWidget)
         self.settingLabel = QLabel(self.tr("设置"), self)
+        self._current_mimo_worker: Optional[MiMoConnectionThread] = None
+        self.destroyed.connect(self._stop_own_mimo_worker)
 
         # 初始化所有设置组
         self.__initGroups()
@@ -487,6 +497,60 @@ class SettingInterface(ScrollArea):
         self.whisperApiModelCard.setVisible(False)
         self.checkWhisperConnectionCard.setVisible(False)
 
+        # MiMo API Base URL
+        self.mimoApiBaseCard = LineEditSettingCard(
+            cfg.mimo_api_base,
+            FIF.LINK,
+            self.tr("MiMo API Base URL"),
+            self.tr("小米 MiMo API 基础地址（支持自定义与 Token Plan 渠道，必填）"),
+            self.tr("请填写对应渠道的 Base URL (如 https://api.xiaomimimo.com/v1)"),
+            self.transcribeGroup,
+        )
+
+        # MiMo API Key
+        self.mimoApiKeyCard = LineEditSettingCard(
+            cfg.mimo_api_key,
+            FIF.FINGERPRINT,
+            self.tr("MiMo API Key"),
+            self.tr("输入小米 MiMo API Key（必填）"),
+            "sk-",
+            self.transcribeGroup,
+        )
+        self.mimoApiKeyCard.lineEdit.setEchoMode(QLineEdit.EchoMode.Password)
+
+        # MiMo 模型选择
+        self.mimoApiModelCard = LineEditSettingCard(
+            cfg.mimo_api_model,
+            FIF.ROBOT,  # type: ignore
+            self.tr("MiMo 模型"),
+            self.tr("输入 MiMo 模型名称"),
+            "mimo-v2.5-asr",
+            self.transcribeGroup,
+        )
+
+        self.mimoRateWidget = MiMoRateSettingWidget(self)
+        self.mimoRateWidget.setVisible(False)
+        self.mimoVadWidget = MiMoVADSettingWidget(self)
+        self.mimoAlignmentWidget = MiMoAlignmentSettingWidget(self)
+        self.mimoAlignmentWidget.setVisible(False)
+        self.mimoVadFilterCard = self.mimoVadWidget.vad_filter_card
+
+        # 测试 MiMo 连接按钮
+        self.checkMiMoConnectionCard = PushSettingCard(
+            self.tr("测试 MiMo 连接"),
+            FIF.CONNECT,
+            self.tr("测试 MiMo API 连接"),
+            self.tr("点击测试 API 识别端点连通性"),
+            self.transcribeGroup,
+        )
+
+        # 默认隐藏 MiMo API 配置卡片（仅在选择 MiMo-ASR 时显示）
+        self.mimoApiBaseCard.setVisible(False)
+        self.mimoApiKeyCard.setVisible(False)
+        self.mimoApiModelCard.setVisible(False)
+        self.mimoVadWidget.setVisible(False)
+        self.checkMiMoConnectionCard.setVisible(False)
+
     def __createTranslateServiceCards(self):
         """创建翻译服务相关的配置卡片"""
         # 翻译服务选择卡片
@@ -602,6 +666,14 @@ class SettingInterface(ScrollArea):
         self.transcribeGroup.addSettingCard(self.whisperApiKeyCard)
         self.transcribeGroup.addSettingCard(self.whisperApiModelCard)
         self.transcribeGroup.addSettingCard(self.checkWhisperConnectionCard)
+        # 添加 MiMo ASR 配置卡片
+        self.transcribeGroup.addSettingCard(self.mimoApiBaseCard)
+        self.transcribeGroup.addSettingCard(self.mimoApiKeyCard)
+        self.transcribeGroup.addSettingCard(self.mimoApiModelCard)
+        self.transcribeGroup.addSettingCard(self.mimoVadWidget)
+        self.transcribeGroup.addSettingCard(self.mimoAlignmentWidget)
+        self.transcribeGroup.addSettingCard(self.mimoRateWidget)
+        self.transcribeGroup.addSettingCard(self.checkMiMoConnectionCard)
 
         # 添加LLM配置卡片
         self.llmGroup.addSettingCard(self.llmServiceCard)
@@ -648,6 +720,9 @@ class SettingInterface(ScrollArea):
 
         # 检查 Whisper 连接
         self.checkWhisperConnectionCard.clicked.connect(self.checkWhisperConnection)
+
+        # 检查 MiMo 连接
+        self.checkMiMoConnectionCard.clicked.connect(self.checkMiMoConnection)
 
         # 保存路径
         self.savePathCard.clicked.connect(self.__onsavePathCardClicked)
@@ -893,10 +968,25 @@ class SettingInterface(ScrollArea):
             self.checkWhisperConnectionCard,
         ]
 
-        # 根据选择的模型显示/隐藏 Whisper API 配置
+        # MiMo ASR 配置卡片
+        mimo_asr_cards = [
+            self.mimoApiBaseCard,
+            self.mimoApiKeyCard,
+            self.mimoApiModelCard,
+            self.mimoVadWidget,
+            self.mimoAlignmentWidget,
+            self.mimoRateWidget,
+            self.checkMiMoConnectionCard,
+        ]
+
+        # 根据选择的模型显示/隐藏配置
         is_whisper_api = model_name == TranscribeModelEnum.WHISPER_API.value
         for card in whisper_api_cards:
             card.setVisible(is_whisper_api)
+
+        is_mimo_asr = model_name == TranscribeModelEnum.MIMO_ASR.value
+        for card in mimo_asr_cards:
+            card.setVisible(is_mimo_asr)
 
         # 更新布局
         self.transcribeGroup.adjustSize()
@@ -990,6 +1080,89 @@ class SettingInterface(ScrollArea):
             duration=INFOBAR_DURATION_ERROR,
             parent=self,
         )
+
+    def _stop_own_mimo_worker(self):
+        """停止 SettingInterface 自身发起的 MiMo 测试 Worker 并断开信号。"""
+        if self._current_mimo_worker is not None:
+            try:
+                self._current_mimo_worker.result_ready.disconnect(
+                    self.onMiMoConnectionCheckFinished
+                )
+            except Exception:
+                pass
+            self._current_mimo_worker.stop()
+            self._current_mimo_worker = None
+
+    def checkMiMoConnection(self):
+        """检查 MiMo API 连接"""
+        scroll_position = self.verticalScrollBar().value()
+
+        base_url = self.mimoApiBaseCard.lineEdit.text().strip()
+        api_key = self.mimoApiKeyCard.lineEdit.text().strip()
+        model = self.mimoApiModelCard.lineEdit.text().strip() or "mimo-v2.5-asr"
+
+        if not base_url:
+            InfoBar.warning(
+                self.tr("配置不完整"),
+                self.tr("请输入 MiMo API Base URL"),
+                duration=INFOBAR_DURATION_ERROR,
+                parent=self,
+            )
+            return
+
+        if not api_key:
+            InfoBar.warning(
+                self.tr("配置不完整"),
+                self.tr("请输入 MiMo API Key"),
+                duration=INFOBAR_DURATION_ERROR,
+                parent=self,
+            )
+            return
+
+        # 检查是否已有测试在运行（本组件或全局活跃 Worker）
+        if (
+            self._current_mimo_worker is not None
+            and self._current_mimo_worker.isRunning()
+        ):
+            return
+        if any(w.isRunning() for w in _ACTIVE_MIMO_WORKERS):
+            return
+
+        self.checkMiMoConnectionCard.button.setEnabled(False)
+        self.checkMiMoConnectionCard.button.setText(self.tr("正在测试..."))
+        self.verticalScrollBar().setValue(scroll_position)
+
+        worker = MiMoConnectionThread(base_url, api_key, model, parent=None)
+        self._current_mimo_worker = worker
+
+        worker.result_ready.connect(self.onMiMoConnectionCheckFinished)
+        worker.start()
+
+    def onMiMoConnectionCheckFinished(self, success, result):
+        """处理 MiMo 连接检查完成事件"""
+        self._current_mimo_worker = None
+        self.checkMiMoConnectionCard.button.setEnabled(True)
+        self.checkMiMoConnectionCard.button.setText(self.tr("测试 MiMo 连接"))
+
+        if success:
+            InfoBar.success(
+                self.tr("连接成功"),
+                result,
+                duration=INFOBAR_DURATION_SUCCESS,
+                parent=self,
+            )
+        else:
+            InfoBar.error(
+                self.tr("连接失败"),
+                result,
+                duration=INFOBAR_DURATION_ERROR,
+                parent=self,
+            )
+
+    def closeEvent(self, event):
+        """关闭时安全终止自身发起的 MiMo 测试线程"""
+        self._stop_own_mimo_worker()
+        super().closeEvent(event)
 
 
 class WhisperConnectionThread(QThread):

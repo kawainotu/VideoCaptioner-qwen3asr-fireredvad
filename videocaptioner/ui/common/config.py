@@ -30,6 +30,7 @@ from videocaptioner.core.asr.qwen3_vad_models import (
 from videocaptioner.core.entities import (
     FasterWhisperModelEnum,
     LLMServiceEnum,
+    MiMoLanguageEnum,
     SubtitleLayoutEnum,
     SubtitleRenderModeEnum,
     TranscribeLanguageEnum,
@@ -40,6 +41,8 @@ from videocaptioner.core.entities import (
     VideoQualityEnum,
     WhisperModelEnum,
 )
+from videocaptioner.core.llm.mimo_rate_limit import DEFAULT_MIMO_RPM, DEFAULT_MIMO_TPM
+from videocaptioner.core.mimo_vad_defaults import MIMO_FIRERED_VAD_DEFAULTS
 from videocaptioner.core.qwen3_vad_defaults import (
     FIRERED_VAD_DEFAULTS,
     LEGACY_FIRERED_VAD_DEFAULTS,
@@ -318,6 +321,90 @@ class Config(QConfig):
     whisper_api_key = ConfigItem("WhisperAPI", "WhisperApiKey", "")
     whisper_api_model = OptionsConfigItem("WhisperAPI", "WhisperApiModel", "")
     whisper_api_prompt = ConfigItem("WhisperAPI", "WhisperApiPrompt", "")
+
+    # ------------------- MiMo-ASR 配置 -------------------
+    mimo_api_base = ConfigItem("MiMoASR", "MiMoApiBase", "")
+    mimo_api_key = ConfigItem("MiMoASR", "MiMoApiKey", "")
+    mimo_api_model = ConfigItem("MiMoASR", "MiMoApiModel", "mimo-v2.5-asr")
+    mimo_aligner_device = OptionsConfigItem(
+        "MiMoASR", "AlignerDevice", "auto", OptionsValidator(["auto", "cuda", "cpu"])
+    )
+    mimo_rpm = RangeConfigItem("MiMoASR", "RequestsPerMinute", DEFAULT_MIMO_RPM, RangeValidator(1, 100000))
+    mimo_tpm = RangeConfigItem("MiMoASR", "TokensPerMinute", DEFAULT_MIMO_TPM, RangeValidator(1, 100000000))
+    mimo_vad_filter = ConfigItem("MiMoASR", "VadFilter", True, BoolValidator())
+    mimo_vad_model = OptionsConfigItem(
+        "MiMoASR",
+        "VadModel",
+        DEFAULT_QWEN3_VAD_MODEL_KEY,
+        OptionsValidator([model.key for model in QWEN3_VAD_MODELS]),
+    )
+    mimo_vad_threshold = RangeConfigItem(
+        "MiMoASR", "VadThreshold", 0.5, RangeValidator(0, 1)
+    )
+    mimo_vad_min_speech_ms = RangeConfigItem(
+        "MiMoASR", "VadMinSpeechMs", 250, RangeValidator(50, 5000)
+    )
+    mimo_vad_min_silence_ms = RangeConfigItem(
+        "MiMoASR", "VadMinSilenceMs", 500, RangeValidator(50, 5000)
+    )
+    mimo_vad_speech_pad_ms = RangeConfigItem(
+        "MiMoASR", "VadSpeechPadMs", 300, RangeValidator(0, 2000)
+    )
+    mimo_firered_vad_smooth_window_size = RangeConfigItem(
+        "MiMoASR",
+        "FireRedVadSmoothWindowSize",
+        MIMO_FIRERED_VAD_DEFAULTS["smooth_window_size"],
+        RangeValidator(1, 101),
+    )
+    mimo_firered_vad_speech_threshold = RangeConfigItem(
+        "MiMoASR",
+        "FireRedVadSpeechThreshold",
+        MIMO_FIRERED_VAD_DEFAULTS["speech_threshold"],
+        RangeValidator(0, 1),
+    )
+    mimo_firered_vad_min_speech_frame = RangeConfigItem(
+        "MiMoASR",
+        "FireRedVadMinSpeechFrame",
+        MIMO_FIRERED_VAD_DEFAULTS["min_speech_frame"],
+        RangeValidator(1, 5000),
+    )
+    mimo_firered_vad_max_speech_frame = RangeConfigItem(
+        "MiMoASR",
+        "FireRedVadMaxSpeechFrame",
+        MIMO_FIRERED_VAD_DEFAULTS["max_speech_frame"],
+        RangeValidator(1, 30000),
+    )
+    mimo_firered_vad_min_silence_frame = RangeConfigItem(
+        "MiMoASR",
+        "FireRedVadMinSilenceFrame",
+        MIMO_FIRERED_VAD_DEFAULTS["min_silence_frame"],
+        RangeValidator(1, 5000),
+    )
+    mimo_firered_vad_merge_silence_frame = RangeConfigItem(
+        "MiMoASR",
+        "FireRedVadMergeSilenceFrame",
+        MIMO_FIRERED_VAD_DEFAULTS["merge_silence_frame"],
+        RangeValidator(0, 5000),
+    )
+    mimo_firered_vad_extend_speech_frame = RangeConfigItem(
+        "MiMoASR",
+        "FireRedVadExtendSpeechFrame",
+        MIMO_FIRERED_VAD_DEFAULTS["extend_speech_frame"],
+        RangeValidator(0, 1000),
+    )
+    mimo_firered_vad_chunk_max_frame = RangeConfigItem(
+        "MiMoASR",
+        "FireRedVadChunkMaxFrame",
+        MIMO_FIRERED_VAD_DEFAULTS["chunk_max_frame"],
+        RangeValidator(100, 60000),
+    )
+    mimo_transcribe_language = OptionsConfigItem(
+        "MiMoASR",
+        "Language",
+        MiMoLanguageEnum.AUTO,
+        OptionsValidator(MiMoLanguageEnum),
+        EnumSerializer(MiMoLanguageEnum),
+    )
 
     # ------------------- 字幕配置 -------------------
     need_optimize = ConfigItem("Subtitle", "NeedOptimize", False, BoolValidator())

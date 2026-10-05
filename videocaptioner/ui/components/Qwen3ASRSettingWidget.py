@@ -52,6 +52,9 @@ from videocaptioner.ui.thread.huggingface_download_thread import HuggingFaceDown
 from videocaptioner.ui.thread.modelscope_download_thread import ModelscopeDownloadThread
 from videocaptioner.ui.thread.qwen_runtime_install_thread import QwenRuntimeInstallThread
 
+# Downloads cannot be cancelled safely; retain their ownership if a dialog closes.
+_ACTIVE_QWEN_COMPONENT_WORKERS = set()
+
 
 def qwen_components(
     asr_model: Qwen3ASRModel, vad_model: Qwen3VADModel
@@ -123,22 +126,31 @@ class Qwen3ASRManagerDialog(MessageBoxBase):
         vad_model: Qwen3VADModel,
         parent=None,
         setting_widget=None,
+        aligner_only=False,
     ):
         super().__init__(parent)
         self.widget.setMinimumWidth(680)
         self.asr_model = asr_model
         self.vad_model = vad_model
+        self.aligner_only = aligner_only
         self.components = qwen_components(asr_model, vad_model)
+        if aligner_only:
+            self.components = tuple(c for c in self.components if c["kind"] in ("runtime", "aligner"))
         self.setting_widget = setting_widget
+        if setting_widget is not None:
+            setting_widget.destroyed.connect(self._on_setting_widget_destroyed)
         self.active_thread = None
         self.operation_failed = False
         self._setup_ui()
         self.rejected.connect(self._on_rejected)
 
+    def _on_setting_widget_destroyed(self) -> None:
+        self.setting_widget = None
+
     def _setup_ui(self) -> None:
         layout = QVBoxLayout()
         title_row = QHBoxLayout()
-        title_row.addWidget(SubtitleLabel(self.tr("Qwen3-ASR 组件管理"), self))
+        title_row.addWidget(SubtitleLabel(self.tr("MiMo 本地对齐组件" if self.aligner_only else "Qwen3-ASR 组件管理"), self))
         title_row.addStretch()
         open_folder_button = HyperlinkButton("", self.tr("打开模型文件夹"), self)
         open_folder_button.setIcon(FIF.FOLDER)
@@ -147,33 +159,34 @@ class Qwen3ASRManagerDialog(MessageBoxBase):
         layout.addLayout(title_row)
         layout.addWidget(
             BodyLabel(
-                self.tr("请安装识别、强制对齐及当前所选 VAD 所需的组件"), self
+                self.tr("只需共享运行环境和 Qwen3-ForcedAligner-0.6B，无需下载 Qwen 识别模型" if self.aligner_only else "请安装识别、强制对齐及当前所选 VAD 所需的组件"), self
             )
         )
 
-        model_selector_row = QHBoxLayout()
-        model_selector_row.addWidget(BodyLabel(self.tr("Qwen3 系列模型"), self))
-        model_selector_row.addStretch()
-        self.model_selector = SegmentedWidget(self)
-        self.model_selector.setMinimumWidth(360)
-        for model in QWEN3_ASR_MODELS:
-            self.model_selector.addItem(model.key, self.tr(model.label))
-        self.model_selector.setCurrentItem(self.asr_model.key)
-        self.model_selector.currentItemChanged.connect(self._on_model_changed)
-        model_selector_row.addWidget(self.model_selector)
-        layout.addLayout(model_selector_row)
+        if not self.aligner_only:
+            model_selector_row = QHBoxLayout()
+            model_selector_row.addWidget(BodyLabel(self.tr("Qwen3 系列模型"), self))
+            model_selector_row.addStretch()
+            self.model_selector = SegmentedWidget(self)
+            self.model_selector.setMinimumWidth(360)
+            for model in QWEN3_ASR_MODELS:
+                self.model_selector.addItem(model.key, self.tr(model.label))
+            self.model_selector.setCurrentItem(self.asr_model.key)
+            self.model_selector.currentItemChanged.connect(self._on_model_changed)
+            model_selector_row.addWidget(self.model_selector)
+            layout.addLayout(model_selector_row)
 
-        vad_selector_row = QHBoxLayout()
-        vad_selector_row.addWidget(BodyLabel(self.tr("VAD 模型"), self))
-        vad_selector_row.addStretch()
-        self.vad_selector = SegmentedWidget(self)
-        self.vad_selector.setMinimumWidth(360)
-        for model in QWEN3_VAD_MODELS:
-            self.vad_selector.addItem(model.key, self.tr(model.label))
-        self.vad_selector.setCurrentItem(self.vad_model.key)
-        self.vad_selector.currentItemChanged.connect(self._on_vad_model_changed)
-        vad_selector_row.addWidget(self.vad_selector)
-        layout.addLayout(vad_selector_row)
+            vad_selector_row = QHBoxLayout()
+            vad_selector_row.addWidget(BodyLabel(self.tr("VAD 模型"), self))
+            vad_selector_row.addStretch()
+            self.vad_selector = SegmentedWidget(self)
+            self.vad_selector.setMinimumWidth(360)
+            for model in QWEN3_VAD_MODELS:
+                self.vad_selector.addItem(model.key, self.tr(model.label))
+            self.vad_selector.setCurrentItem(self.vad_model.key)
+            self.vad_selector.currentItemChanged.connect(self._on_vad_model_changed)
+            vad_selector_row.addWidget(self.vad_selector)
+            layout.addLayout(vad_selector_row)
 
         self.table = TableWidget(self)
         self.table.setEditTriggers(TableWidget.NoEditTriggers)
@@ -295,6 +308,8 @@ class Qwen3ASRManagerDialog(MessageBoxBase):
         else:
             thread = ModelscopeDownloadThread(component["model_id"], str(component["path"]))
         self.active_thread = thread
+        _ACTIVE_QWEN_COMPONENT_WORKERS.add(thread)
+        thread.finished.connect(lambda: _ACTIVE_QWEN_COMPONENT_WORKERS.discard(thread))
         thread.progress.connect(self._on_progress)
         thread.error.connect(self._on_error)
         thread.finished.connect(self._on_finished)
@@ -321,7 +336,7 @@ class Qwen3ASRManagerDialog(MessageBoxBase):
         if not failed:
             InfoBar.success(
                 self.tr("安装完成"),
-                self.tr("Qwen3-ASR 组件已就绪"),
+                self.tr("组件安装完成，可查看各项就绪状态"),
                 parent=self,
                 duration=3000,
                 position=InfoBarPosition.BOTTOM,

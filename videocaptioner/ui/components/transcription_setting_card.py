@@ -12,6 +12,7 @@ from videocaptioner.core.entities import (
 from videocaptioner.core.utils.platform_utils import is_macos, is_windows
 
 from .FasterWhisperSettingWidget import FasterWhisperSettingWidget
+from .MiMoASRSettingWidget import MiMoASRSettingWidget
 from .Qwen3ASRSettingWidget import Qwen3ASRSettingWidget
 from .WhisperAPISettingWidget import WhisperAPISettingWidget
 from .WhisperCppSettingWidget import WhisperCppSettingWidget
@@ -33,6 +34,7 @@ class TranscriptionSettingCard(QWidget):
         self.empty_widget = QWidget(self)  # 添加空白页面作为默认显示
         self.whisper_cpp_widget = WhisperCppSettingWidget(self)
         self.whisper_api_widget = WhisperAPISettingWidget(self)
+        self.mimo_asr_widget = MiMoASRSettingWidget(self)
 
         # FasterWhisper 在 macOS 上不可用
         self.faster_whisper_widget: Optional[FasterWhisperSettingWidget] = None
@@ -45,6 +47,7 @@ class TranscriptionSettingCard(QWidget):
         self.stacked_widget.addWidget(self.empty_widget)  # 添加空白页面
         self.stacked_widget.addWidget(self.whisper_cpp_widget)
         self.stacked_widget.addWidget(self.whisper_api_widget)
+        self.stacked_widget.addWidget(self.mimo_asr_widget)
         if self.faster_whisper_widget is not None:
             self.stacked_widget.addWidget(self.faster_whisper_widget)
         if self.qwen3_asr_widget is not None:
@@ -58,6 +61,8 @@ class TranscriptionSettingCard(QWidget):
             self.stacked_widget.setCurrentWidget(self.whisper_cpp_widget)
         elif value == TranscribeModelEnum.WHISPER_API.value:
             self.stacked_widget.setCurrentWidget(self.whisper_api_widget)
+        elif value == TranscribeModelEnum.MIMO_ASR.value:
+            self.stacked_widget.setCurrentWidget(self.mimo_asr_widget)
         elif value == TranscribeModelEnum.FASTER_WHISPER.value:
             self.stacked_widget.setCurrentWidget(self.faster_whisper_widget)
         elif value == TranscribeModelEnum.QWEN3_ASR.value:

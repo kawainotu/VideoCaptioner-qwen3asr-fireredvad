@@ -6,13 +6,14 @@ from videocaptioner.core.asr.bcut import BcutASR
 from videocaptioner.core.asr.chunked_asr import ChunkedASR
 from videocaptioner.core.asr.faster_whisper import FasterWhisperASR
 from videocaptioner.core.asr.jianying import JianYingASR
+from videocaptioner.core.asr.mimo_asr import MiMoASR
 from videocaptioner.core.asr.qwen3_asr import Qwen3ASR
 from videocaptioner.core.asr.whisper_api import WhisperAPI
 from videocaptioner.core.asr.whisper_cpp import WhisperCppASR
 from videocaptioner.core.entities import TranscribeConfig, TranscribeModelEnum
 
 
-def transcribe(audio_path: str, config: TranscribeConfig, callback=None) -> ASRData:
+def transcribe(audio_path: str, config: TranscribeConfig, callback=None, on_asr_created=None) -> ASRData:
     """Transcribe audio file using specified configuration.
 
     Args:
@@ -35,12 +36,14 @@ def transcribe(audio_path: str, config: TranscribeConfig, callback=None) -> ASRD
 
     # Create ASR instance based on model type
     asr = _create_asr_instance(audio_path, config)
+    if on_asr_created is not None:
+        on_asr_created(asr)
 
     # Run transcription
     asr_data = asr.run(callback=callback)
 
-    # Optimize subtitle timing if not using word timestamps
-    if not config.need_word_time_stamp:
+    # Optimize subtitle timing if not using word timestamps (bypass for MiMo to preserve exact VAD chunk timing)
+    if not config.need_word_time_stamp and config.transcribe_model != TranscribeModelEnum.MIMO_ASR:
         asr_data.optimize_timing()
 
     return asr_data
@@ -69,6 +72,9 @@ def _create_asr_instance(audio_path: str, config: TranscribeConfig) -> Union[Chu
 
     elif model_type == TranscribeModelEnum.WHISPER_API:
         return _create_whisper_api_asr(audio_path, config)
+
+    elif model_type == TranscribeModelEnum.MIMO_ASR:
+        return _create_mimo_asr(audio_path, config)
 
     elif model_type == TranscribeModelEnum.FASTER_WHISPER:
         return _create_faster_whisper_asr(audio_path, config)
@@ -130,6 +136,39 @@ def _create_whisper_api_asr(audio_path: str, config: TranscribeConfig) -> Chunke
     }
     return ChunkedASR(
         asr_class=WhisperAPI, audio_path=audio_path, asr_kwargs=asr_kwargs
+    )
+
+
+def _create_mimo_asr(audio_path: str, config: TranscribeConfig) -> MiMoASR:
+    """Create MiMo-ASR instance with direct bounded chunking and local VAD support."""
+    return MiMoASR(
+        audio_input=audio_path,
+        api_key=config.mimo_api_key or "",
+        base_url=config.mimo_api_base or "",
+        model=config.mimo_api_model or "mimo-v2.5-asr",
+        language=config.transcribe_language or "auto",
+        vad_filter=config.mimo_vad_filter,
+        rpm=config.mimo_rpm,
+        tpm=config.mimo_tpm,
+        aligner_model_dir=config.mimo_aligner_model_dir,
+        aligner_runtime_python=config.mimo_aligner_runtime_python,
+        aligner_device=config.mimo_aligner_device,
+        vad_model=config.mimo_vad_model,
+        firered_vad_model_dir=config.mimo_vad_model_dir,
+        vad_threshold=config.mimo_vad_threshold,
+        vad_min_speech_ms=config.mimo_vad_min_speech_ms,
+        vad_min_silence_ms=config.mimo_vad_min_silence_ms,
+        vad_speech_pad_ms=config.mimo_vad_speech_pad_ms,
+        firered_vad_smooth_window_size=config.mimo_firered_vad_smooth_window_size,
+        firered_vad_speech_threshold=config.mimo_firered_vad_speech_threshold,
+        firered_vad_min_speech_frame=config.mimo_firered_vad_min_speech_frame,
+        firered_vad_max_speech_frame=config.mimo_firered_vad_max_speech_frame,
+        firered_vad_min_silence_frame=config.mimo_firered_vad_min_silence_frame,
+        firered_vad_merge_silence_frame=config.mimo_firered_vad_merge_silence_frame,
+        firered_vad_extend_speech_frame=config.mimo_firered_vad_extend_speech_frame,
+        firered_vad_chunk_max_frame=config.mimo_firered_vad_chunk_max_frame,
+        use_cache=True,
+        need_word_time_stamp=False,
     )
 
 

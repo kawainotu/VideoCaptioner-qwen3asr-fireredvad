@@ -22,6 +22,7 @@ from qfluentwidgets import (
     BodyLabel,
     CardWidget,
     CommandBar,
+    FlowLayout,
     FluentIcon,
     InfoBar,
     InfoBarPosition,
@@ -73,14 +74,24 @@ class VideoInfoCard(CardWidget):
         self.selected_audio_track_index = 0  # 默认选择第一条音轨
 
     def setup_ui(self) -> None:
-        self.setFixedHeight(150)
-        self.main_layout = QHBoxLayout(self)
-        self.main_layout.setContentsMargins(20, 15, 20, 15)
+        self.setMinimumHeight(150)
+        self.card_layout = QVBoxLayout(self)
+        self.card_layout.setContentsMargins(20, 15, 20, 15)
+        self.main_layout = QHBoxLayout()
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(20)
+        self.card_layout.addLayout(self.main_layout)
 
         self.setup_thumbnail()
         self.setup_info_layout()
         self.setup_button_layout()
+        self.status_label = BodyLabel(self)
+        self.status_label.setTextFormat(Qt.PlainText)
+        self.status_label.setWordWrap(True)
+        self.status_label.setMinimumWidth(0)
+        self.status_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.status_label.hide()
+        self.card_layout.addWidget(self.status_label)
 
     def setup_thumbnail(self) -> None:
         default_thumbnail_path = os.path.join(DEFAULT_THUMBNAIL_PATH)
@@ -105,10 +116,15 @@ class VideoInfoCard(CardWidget):
         self.video_title = BodyLabel(self.tr("请拖入音频或视频文件"), self)
         self.video_title.setFont(QFont("Microsoft YaHei", 14, QFont.Bold))
         self.video_title.setWordWrap(True)
+        self.video_title.setTextFormat(Qt.PlainText)
+        self.video_title.setMinimumWidth(0)
+        self.video_title.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.info_layout.addWidget(self.video_title, alignment=Qt.AlignTop)  # type: ignore
 
-        self.details_layout = QHBoxLayout()
-        self.details_layout.setSpacing(15)
+        self.details_layout = FlowLayout(isTight=True)
+        self.details_layout.setContentsMargins(0, 0, 0, 0)
+        self.details_layout.setHorizontalSpacing(10)
+        self.details_layout.setVerticalSpacing(8)
 
         self.resolution_info = self.create_pill_button(self.tr("画质"), 110)
         self.file_size_info = self.create_pill_button(self.tr("文件大小"), 110)
@@ -126,17 +142,21 @@ class VideoInfoCard(CardWidget):
         self.details_layout.addWidget(self.duration_info)
         self.details_layout.addWidget(self.audio_track_button)
         self.details_layout.addWidget(self.progress_ring)
-        self.details_layout.addStretch(1)
         self.info_layout.addLayout(self.details_layout)
-        self.main_layout.addLayout(self.info_layout)  # type: ignore
+        self.main_layout.addLayout(self.info_layout, 1)  # type: ignore
 
     def create_pill_button(self, text: str, width: int) -> PillPushButton:
         button = PillPushButton(text, self)
         button.setCheckable(False)
         setFont(button, 11)
-        # button.setFixedWidth(width)
-        button.setMinimumWidth(50)
+        button.setMinimumWidth(max(width, button.sizeHint().width()))
+        button.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         return button
+
+    def set_metadata_text(self, button: PillPushButton, text: str) -> None:
+        button.setText(text)
+        button.setToolTip(text)
+        button.setMinimumWidth(button.sizeHint().width())
 
     def setup_button_layout(self) -> None:
         self.button_layout = QVBoxLayout()
@@ -149,20 +169,17 @@ class VideoInfoCard(CardWidget):
 
         self.button_widget = QWidget()
         self.button_widget.setLayout(self.button_layout)
-        self.button_widget.setMinimumWidth(START_BUTTON_MIN_WIDTH)
-        self.button_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        self.button_widget.setFixedWidth(START_BUTTON_MIN_WIDTH)
+        self.button_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
         self.main_layout.addWidget(self.button_widget)  # type: ignore
 
-    def set_status_text(self, text: str) -> None:
-        """Show the complete progress message without clipping the button."""
-        self.start_button.setText(text)
+    def set_status_text(self, text: str, button_text: Optional[str] = None) -> None:
+        """Keep actions compact and display full progress below the media details."""
+        self.start_button.setText(button_text or self.tr("正在转录"))
         self.start_button.setToolTip(text)
-        button_margins = self.button_layout.contentsMargins()
-        required_width = self.start_button.sizeHint().width()
-        required_width += button_margins.left() + button_margins.right()
-        self.button_widget.setMinimumWidth(
-            max(START_BUTTON_MIN_WIDTH, required_width)
-        )
+        self.status_label.setText(text)
+        self.status_label.setToolTip(text)
+        self.status_label.setVisible(bool(text))
 
     def update_info(self, video_info: VideoInfo) -> None:
         """更新视频信息显示"""
@@ -170,13 +187,14 @@ class VideoInfoCard(CardWidget):
         self.video_info = video_info
 
         self.video_title.setText(video_info.file_name.rsplit(".", 1)[0])
-        self.resolution_info.setText(
+        self.video_title.setToolTip(video_info.file_name)
+        self.set_metadata_text(self.resolution_info,
             self.tr("画质: ") + f"{video_info.width}x{video_info.height}"
         )
         file_size_mb = os.path.getsize(video_info.file_path) / 1024 / 1024
-        self.file_size_info.setText(self.tr("大小: ") + f"{file_size_mb:.1f} MB")
+        self.set_metadata_text(self.file_size_info, self.tr("大小: ") + f"{file_size_mb:.1f} MB")
         duration = datetime.timedelta(seconds=int(video_info.duration_seconds))
-        self.duration_info.setText(self.tr("时长: ") + f"{duration}")
+        self.set_metadata_text(self.duration_info, self.tr("时长: ") + f"{duration}")
 
         # 更新音轨选择按钮
         self.update_audio_tracks(video_info)
@@ -242,7 +260,7 @@ class VideoInfoCard(CardWidget):
             text = f"{self.tr('音轨')} {array_index + 1}"
             if lang:
                 text += f" ({lang})"
-            self.audio_track_button.setText(text)
+            self.set_metadata_text(self.audio_track_button, text)
 
     def on_audio_track_selected(self, array_index: int, audio_streams: list) -> None:
         """音轨选择事件处理
@@ -299,6 +317,7 @@ class VideoInfoCard(CardWidget):
         """开始转录过程"""
         self.transcription_interface.is_processing = True  # type: ignore
         self.start_button.setEnabled(False)
+        self.set_status_text(self.tr("正在准备转录"))
 
         if need_create_task:
             self.task = TaskFactory.create_transcribe_task(self.video_info.file_path)
@@ -324,7 +343,7 @@ class VideoInfoCard(CardWidget):
         """处理转录错误"""
         self.transcription_interface.is_processing = False  # type: ignore
         self.start_button.setEnabled(True)
-        self.set_status_text(self.tr("重新转录"))
+        self.set_status_text(self.tr("转录失败: ") + str(error), self.tr("重新转录"))
         self.progress_ring.hide()
         InfoBar.error(
             self.tr("转录失败"),
@@ -336,14 +355,14 @@ class VideoInfoCard(CardWidget):
     def on_transcript_finished(self, task):
         """转录完成处理"""
         self.start_button.setEnabled(True)
-        self.set_status_text(self.tr("转录完成"))
+        self.set_status_text(self.tr("转录完成"), self.tr("转录完成"))
         self.progress_ring.hide()
         self.finished.emit(task)
 
     def reset_ui(self):
         """重置UI状态"""
         self.start_button.setDisabled(False)
-        self.set_status_text(self.tr("开始转录"))
+        self.set_status_text("", self.tr("开始转录"))
         self.progress_ring.setValue(0)
         self.progress_ring.hide()
 
@@ -354,7 +373,11 @@ class VideoInfoCard(CardWidget):
 
     def stop(self):
         if hasattr(self, "transcript_thread"):
-            self.transcript_thread.terminate()
+            config = self.transcript_thread.task.transcribe_config
+            if config and config.transcribe_model == TranscribeModelEnum.MIMO_ASR:
+                self.transcript_thread.cancel()
+            else:
+                self.transcript_thread.terminate()
 
 
 class TranscriptionInterface(QWidget):
@@ -415,6 +438,7 @@ class TranscriptionInterface(QWidget):
         for model in available_models:
             if (
                 model == TranscribeModelEnum.WHISPER_API
+                or model == TranscribeModelEnum.MIMO_ASR
                 or model == TranscribeModelEnum.BIJIAN
                 or model == TranscribeModelEnum.JIANYING
             ):

@@ -5,6 +5,9 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Optional
 
+from videocaptioner.core.llm.mimo_rate_limit import DEFAULT_MIMO_RPM, DEFAULT_MIMO_TPM
+from videocaptioner.core.mimo_vad_defaults import MIMO_FIRERED_VAD_DEFAULTS
+
 from .qwen3_vad_defaults import FIRERED_VAD_DEFAULTS
 
 if TYPE_CHECKING:
@@ -122,6 +125,7 @@ class TranscribeModelEnum(Enum):
     BIJIAN = "B 接口"
     JIANYING = "J 接口"
     WHISPER_API = "Whisper [API] ✨"
+    MIMO_ASR = "MiMo-ASR [API] ✨"
     FASTER_WHISPER = "FasterWhisper ✨"
     QWEN3_ASR = "Qwen3-ASR ✨"
     WHISPER_CPP = "WhisperCpp"
@@ -224,6 +228,23 @@ class VideoQualityEnum(Enum):
             VideoQualityEnum.LOW: "fast",
         }
         return preset_map[self]
+
+
+class MiMoLanguageEnum(Enum):
+    """MiMo ASR 专用的语言选项枚举"""
+
+    AUTO = "自动检测"
+    CHINESE = "中文"
+    ENGLISH = "英语"
+
+    def to_api_code(self) -> str:
+        """转换为 MiMo 官方 API 支持的语言参数代码"""
+        mapping = {
+            MiMoLanguageEnum.AUTO: "auto",
+            MiMoLanguageEnum.CHINESE: "zh",
+            MiMoLanguageEnum.ENGLISH: "en",
+        }
+        return mapping.get(self, "auto")
 
 
 class TranscribeLanguageEnum(Enum):
@@ -509,6 +530,13 @@ ASR_LANGUAGE_CAPABILITIES: dict[TranscribeModelEnum, ASRLanguageCapability] = {
         supported_languages=_get_all_languages_except_auto(),
         supports_auto=True,
     ),
+    TranscribeModelEnum.MIMO_ASR: ASRLanguageCapability(
+        supported_languages=[
+            TranscribeLanguageEnum.CHINESE,
+            TranscribeLanguageEnum.ENGLISH,
+        ],
+        supports_auto=True,
+    ),
 }
 
 
@@ -566,6 +594,30 @@ class TranscribeConfig:
     whisper_api_base: Optional[str] = None
     whisper_api_model: Optional[str] = None
     whisper_api_prompt: Optional[str] = None
+    # MiMo-ASR 配置
+    mimo_api_key: Optional[str] = None
+    mimo_api_base: Optional[str] = None
+    mimo_api_model: Optional[str] = "mimo-v2.5-asr"
+    mimo_rpm: int = DEFAULT_MIMO_RPM
+    mimo_tpm: int = DEFAULT_MIMO_TPM
+    mimo_aligner_model_dir: Optional[str] = None
+    mimo_aligner_runtime_python: Optional[str] = None
+    mimo_aligner_device: str = "auto"
+    mimo_vad_filter: bool = True
+    mimo_vad_model: str = "silero"
+    mimo_vad_model_dir: Optional[str] = None
+    mimo_vad_threshold: float = 0.5
+    mimo_vad_min_speech_ms: int = 250
+    mimo_vad_min_silence_ms: int = 500
+    mimo_vad_speech_pad_ms: int = 300
+    mimo_firered_vad_smooth_window_size: int = MIMO_FIRERED_VAD_DEFAULTS["smooth_window_size"]
+    mimo_firered_vad_speech_threshold: float = MIMO_FIRERED_VAD_DEFAULTS["speech_threshold"]
+    mimo_firered_vad_min_speech_frame: int = MIMO_FIRERED_VAD_DEFAULTS["min_speech_frame"]
+    mimo_firered_vad_max_speech_frame: int = MIMO_FIRERED_VAD_DEFAULTS["max_speech_frame"]
+    mimo_firered_vad_min_silence_frame: int = MIMO_FIRERED_VAD_DEFAULTS["min_silence_frame"]
+    mimo_firered_vad_merge_silence_frame: int = MIMO_FIRERED_VAD_DEFAULTS["merge_silence_frame"]
+    mimo_firered_vad_extend_speech_frame: int = MIMO_FIRERED_VAD_DEFAULTS["extend_speech_frame"]
+    mimo_firered_vad_chunk_max_frame: int = MIMO_FIRERED_VAD_DEFAULTS["chunk_max_frame"]
     # Faster Whisper 配置
     faster_whisper_program: Optional[str] = None
     faster_whisper_model: Optional[FasterWhisperModelEnum] = None
@@ -624,6 +676,14 @@ class TranscribeConfig:
             lines.append(f"API Model: {self.whisper_api_model}")
             if self.whisper_api_prompt:
                 lines.append(f"Prompt: {self.whisper_api_prompt[:30]}...")
+
+        elif self.transcribe_model == TranscribeModelEnum.MIMO_ASR:
+            lines.append(f"API Base: {self.mimo_api_base}")
+            lines.append(f"API Key: {self._mask_key(self.mimo_api_key)}")
+            lines.append(f"API Model: {self.mimo_api_model}")
+            lines.append(f"VAD Filter: {self.mimo_vad_filter}")
+            if self.mimo_vad_filter:
+                lines.append(f"VAD Model: {self.mimo_vad_model}")
 
         elif self.transcribe_model == TranscribeModelEnum.FASTER_WHISPER:
             lines.append(

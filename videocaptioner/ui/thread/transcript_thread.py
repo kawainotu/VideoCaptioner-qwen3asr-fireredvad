@@ -1,15 +1,38 @@
 import datetime
 import tempfile
+import threading
 from pathlib import Path
 
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import QCoreApplication, QThread, pyqtSignal
 
 from videocaptioner.core.asr import transcribe
-from videocaptioner.core.entities import TranscribeOutputFormatEnum, TranscribeTask
+from videocaptioner.core.entities import (
+    TranscribeModelEnum,
+    TranscribeOutputFormatEnum,
+    TranscribeTask,
+)
 from videocaptioner.core.utils.logger import setup_logger
 from videocaptioner.core.utils.video_utils import video2audio
 
 logger = setup_logger("transcript_thread")
+_ACTIVE_TRANSCRIPT_THREADS = set()
+_LAST_CONNECTED_APP = None
+
+
+def cancel_active_mimo_transcriptions():
+    """Stop MiMo runners even when the app quits without closing child pages."""
+    for thread in tuple(_ACTIVE_TRANSCRIPT_THREADS):
+        config = thread.task.transcribe_config
+        if config and config.transcribe_model == TranscribeModelEnum.MIMO_ASR:
+            thread.cancel()
+
+
+def _connect_app_shutdown():
+    global _LAST_CONNECTED_APP
+    app = QCoreApplication.instance()
+    if app is not None and app is not _LAST_CONNECTED_APP:
+        app.aboutToQuit.connect(cancel_active_mimo_transcriptions)
+        _LAST_CONNECTED_APP = app
 
 
 class TranscriptThread(QThread):
@@ -20,9 +43,39 @@ class TranscriptThread(QThread):
     def __init__(self, task: TranscribeTask):
         super().__init__()
         self.task = task
+        self._cancelled = threading.Event()
+        self._asr = None
+        _connect_app_shutdown()
+        QThread.finished.__get__(self, type(self)).connect(self._release_worker)
+
+    def start(self, *args, **kwargs):
+        _ACTIVE_TRANSCRIPT_THREADS.add(self)
+        super().start(*args, **kwargs)
+
+    def _release_worker(self):
+        _ACTIVE_TRANSCRIPT_THREADS.discard(self)
+
+    def cancel(self):
+        """Request cancellation without blocking the UI or bypassing cleanup."""
+        self._cancelled.set()
+        asr = self._asr
+        if asr is not None and hasattr(asr, "cancel"):
+            asr.cancel()
+
+    def _on_asr_created(self, asr):
+        self._asr = asr
+        if self._cancelled.is_set():
+            if hasattr(asr, "cancel"):
+                asr.cancel()
+            self._raise_if_cancelled()
+
+    def _raise_if_cancelled(self):
+        if self._cancelled.is_set():
+            raise RuntimeError("转录任务已取消")
 
     def run(self):
         try:
+            self._raise_if_cancelled()
             self.task.started_at = datetime.datetime.now()
             logger.info(f"\n{self.task.transcribe_config.print_config()}")
 
@@ -35,9 +88,13 @@ class TranscriptThread(QThread):
             self._perform_transcription()
 
         except Exception as e:
+            if self._cancelled.is_set():
+                return
             logger.exception("转录过程中发生错误: %s", str(e))
             self.error.emit(str(e))
             self.progress.emit(100, self.tr("转录失败"))
+        finally:
+            self._asr = None
 
     def _validate_task(self):
         """验证任务配置"""
@@ -69,6 +126,7 @@ class TranscriptThread(QThread):
             return False
 
         subtitle_file = downloaded_subtitles[0]
+        self._raise_if_cancelled()
         self.task.output_path = str(subtitle_file)
         logger.info(f"字幕文件已下载，跳过转录。找到下载的字幕文件：{subtitle_file}")
         self.progress.emit(100, self.tr("字幕已下载"))
@@ -100,6 +158,7 @@ class TranscriptThread(QThread):
                 output=temp_audio_path,
                 audio_track_index=audio_track_index,
             )
+            self._raise_if_cancelled()
             if not is_success:
                 logger.error("音频转换失败")
                 raise RuntimeError(self.tr("音频转换失败"))
@@ -112,7 +171,9 @@ class TranscriptThread(QThread):
                 temp_audio_path,
                 self.task.transcribe_config,
                 callback=self.progress_callback,
+                on_asr_created=self._on_asr_created,
             )
+            self._raise_if_cancelled()
 
             # 保存字幕文件（根据配置的输出格式）
             output_path = Path(self.task.output_path)
@@ -135,15 +196,18 @@ class TranscriptThread(QThread):
 
             # 保存字幕文件
             for fmt in formats_to_export:
+                self._raise_if_cancelled()
                 save_path = f"{base_path}.{fmt}"
                 asr_data.save(save_path)
                 logger.info("%s 字幕文件已保存到: %s", fmt.upper(), save_path)
 
+            self._raise_if_cancelled()
             self.progress.emit(100, self.tr("转录完成"))
             self.finished.emit(self.task)
         finally:
             Path(temp_audio_path).unlink(missing_ok=True)
 
     def progress_callback(self, value, message):
+        self._raise_if_cancelled()
         progress = min(20 + (value * 0.8), 100)
         self.progress.emit(int(progress), message)

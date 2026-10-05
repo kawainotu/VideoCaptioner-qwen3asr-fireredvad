@@ -45,7 +45,6 @@ from videocaptioner.core.llm.mimo_rate_limit import DEFAULT_MIMO_RPM, DEFAULT_MI
 from videocaptioner.core.mimo_vad_defaults import MIMO_FIRERED_VAD_DEFAULTS
 from videocaptioner.core.qwen3_vad_defaults import (
     FIRERED_VAD_DEFAULTS,
-    LEGACY_FIRERED_VAD_DEFAULTS,
 )
 from videocaptioner.core.translate.types import TargetLanguage
 from videocaptioner.core.utils.platform_utils import get_available_transcribe_models
@@ -518,49 +517,3 @@ cfg = Config()
 cfg.themeMode.value = Theme.DARK
 cfg.themeColor.value = QColor("#ff28f08b")
 qconfig.load(SETTINGS_PATH, cfg)
-
-_firered_vad_migration = (
-    (
-        cfg.qwen_asr_firered_vad_smooth_window_size,
-        LEGACY_FIRERED_VAD_DEFAULTS.smooth_window_size,
-        FIRERED_VAD_DEFAULTS.smooth_window_size,
-    ),
-    (
-        cfg.qwen_asr_firered_vad_speech_threshold,
-        LEGACY_FIRERED_VAD_DEFAULTS.speech_threshold,
-        FIRERED_VAD_DEFAULTS.speech_threshold,
-    ),
-    (
-        cfg.qwen_asr_firered_vad_min_speech_frame,
-        LEGACY_FIRERED_VAD_DEFAULTS.min_speech_frame,
-        FIRERED_VAD_DEFAULTS.min_speech_frame,
-    ),
-    (
-        cfg.qwen_asr_firered_vad_max_speech_frame,
-        LEGACY_FIRERED_VAD_DEFAULTS.max_speech_frame,
-        FIRERED_VAD_DEFAULTS.max_speech_frame,
-    ),
-    (
-        cfg.qwen_asr_firered_vad_min_silence_frame,
-        LEGACY_FIRERED_VAD_DEFAULTS.min_silence_frame,
-        FIRERED_VAD_DEFAULTS.min_silence_frame,
-    ),
-    (
-        cfg.qwen_asr_firered_vad_merge_silence_frame,
-        LEGACY_FIRERED_VAD_DEFAULTS.merge_silence_frame,
-        FIRERED_VAD_DEFAULTS.merge_silence_frame,
-    ),
-    (
-        cfg.qwen_asr_firered_vad_extend_speech_frame,
-        LEGACY_FIRERED_VAD_DEFAULTS.extend_speech_frame,
-        FIRERED_VAD_DEFAULTS.extend_speech_frame,
-    ),
-    (
-        cfg.qwen_asr_firered_vad_chunk_max_frame,
-        LEGACY_FIRERED_VAD_DEFAULTS.chunk_max_frame,
-        FIRERED_VAD_DEFAULTS.chunk_max_frame,
-    ),
-)
-if all(item.value == old_value for item, old_value, _ in _firered_vad_migration):
-    for item, _, new_value in _firered_vad_migration:
-        cfg.set(item, new_value)

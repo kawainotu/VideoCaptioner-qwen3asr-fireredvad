@@ -17,22 +17,8 @@ class FireRedVADDefaults:
     chunk_max_frame: int
 
 
-# Tuned against Japanese anime dialogue to retain short utterances and enough
-# surrounding context without joining rapid multi-speaker scenes too aggressively.
+# Official non-streaming FireRedVAD baseline; existing user settings are retained.
 FIRERED_VAD_DEFAULTS = FireRedVADDefaults(
-    smooth_window_size=5,
-    speech_threshold=0.4,
-    min_speech_frame=12,
-    max_speech_frame=1500,
-    min_silence_frame=30,
-    merge_silence_frame=50,
-    extend_speech_frame=15,
-    chunk_max_frame=30000,
-)
-
-
-# Used only to migrate installations that still have every former default.
-LEGACY_FIRERED_VAD_DEFAULTS = FireRedVADDefaults(
     smooth_window_size=5,
     speech_threshold=0.4,
     min_speech_frame=20,

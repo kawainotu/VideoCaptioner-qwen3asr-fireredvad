@@ -11,6 +11,7 @@ from qfluentwidgets import (
     InfoBarPosition,
     MessageBoxBase,
     ProgressBar,
+    PushSettingCard,
     SegmentedWidget,
     SettingCard,
     SettingCardGroup,
@@ -43,6 +44,7 @@ from videocaptioner.core.asr.qwen3_vad_models import (
 from videocaptioner.core.entities import TranscribeLanguageEnum
 from videocaptioner.core.utils.platform_utils import open_folder
 from videocaptioner.ui.common.config import cfg
+from videocaptioner.ui.common.qwen_vad_defaults import reset_qwen_firered_defaults
 from videocaptioner.ui.components.LineEditSettingCard import LineEditSettingCard
 from videocaptioner.ui.components.SpinBoxSettingCard import (
     DoubleSpinBoxSettingCard,
@@ -581,6 +583,12 @@ class Qwen3ASRSettingWidget(QWidget):
             maximum=60000,
             parent=self.vad_group,
         )
+        self.firered_reset_card = PushSettingCard(
+            self.tr("恢复默认参数"), FIF.SYNC,
+            self.tr("恢复 Qwen3-ASR FireRed 默认参数"),
+            self.tr("恢复官方非流式基线，仅重置此处八项 FireRed 参数。"),
+            self.vad_group,
+        )
         for card in (
             self.firered_smooth_window_card,
             self.firered_min_speech_card,
@@ -633,6 +641,7 @@ class Qwen3ASRSettingWidget(QWidget):
             self.firered_merge_silence_card,
             self.firered_extend_speech_card,
             self.firered_chunk_max_card,
+            self.firered_reset_card,
         ):
             self.vad_group.addSettingCard(card)
         self.other_group.addSettingCard(self.timestamp_card)
@@ -652,6 +661,7 @@ class Qwen3ASRSettingWidget(QWidget):
         self.main_layout.addWidget(self.scroll_area)
 
     def _connect_signals(self) -> None:
+        self.firered_reset_card.clicked.connect(lambda: reset_qwen_firered_defaults(cfg))
         self.manage_card.linkButton.clicked.connect(self._show_manager)
         self.model_selector.currentItemChanged.connect(self._on_qwen_model_changed)
         cfg.qwen_asr_model.valueChanged.connect(self._on_qwen_model_config_changed)
@@ -717,6 +727,7 @@ class Qwen3ASRSettingWidget(QWidget):
             self.firered_merge_silence_card,
             self.firered_extend_speech_card,
             self.firered_chunk_max_card,
+            self.firered_reset_card,
         )
         for card in silero_cards:
             card.setVisible(not use_firered)

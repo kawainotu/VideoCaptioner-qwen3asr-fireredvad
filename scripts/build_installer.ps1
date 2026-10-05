@@ -10,6 +10,12 @@ $resourceDir = Join-Path $projectRoot "resource"
 $icon = Join-Path $resourceDir "assets\logo.ico"
 $qwenRunner = Join-Path $projectRoot "videocaptioner\core\asr\qwen3_asr_runner.py"
 $qwenRunnerBundlePath = Join-Path $projectRoot "dist\VideoCaptioner\_internal\videocaptioner\core\asr\qwen3_asr_runner.py"
+$mimoVadRunner = Join-Path $projectRoot "videocaptioner\core\asr\mimo_vad_runner.py"
+$mimoAlignmentRunner = Join-Path $projectRoot "videocaptioner\core\asr\mimo_alignment_runner.py"
+$mimoVadDefaults = Join-Path $projectRoot "videocaptioner\core\mimo_vad_defaults.py"
+$mimoVadRunnerBundlePath = Join-Path $projectRoot "dist\VideoCaptioner\_internal\videocaptioner\core\asr\mimo_vad_runner.py"
+$mimoAlignmentRunnerBundlePath = Join-Path $projectRoot "dist\VideoCaptioner\_internal\videocaptioner\core\asr\mimo_alignment_runner.py"
+$mimoVadDefaultsBundlePath = Join-Path $projectRoot "dist\VideoCaptioner\_internal\videocaptioner\core\mimo_vad_defaults.py"
 $fireredVadModelDir = Join-Path $projectRoot "build\fireredvad-model"
 $fireredVadWeights = Join-Path $fireredVadModelDir "VAD\model.pth.tar"
 $fireredVadBundlePath = Join-Path $projectRoot "dist\VideoCaptioner\_internal\models\FireRedVAD\VAD\model.pth.tar"
@@ -30,6 +36,11 @@ if (-not (Test-Path $python)) {
 }
 if (-not (Test-Path $qwenRunner)) {
     throw "Qwen3-ASR runner not found in source tree: $qwenRunner"
+}
+foreach ($mimoSource in @($mimoVadRunner, $mimoAlignmentRunner, $mimoVadDefaults)) {
+    if (-not (Test-Path $mimoSource)) {
+        throw "MiMo isolated worker source not found: $mimoSource"
+    }
 }
 
 $pythonMetadata = @(& $python -c "import sys; print(sys.base_prefix); print(f'{sys.version_info.major}.{sys.version_info.minor}')")
@@ -79,12 +90,39 @@ if ($LASTEXITCODE -ne 0) {
 
 Push-Location $projectRoot
 try {
+    # Do not inherit stale editable-install / VCS metadata in the frozen app.
+    $versionSource = Join-Path $projectRoot "videocaptioner\_version.py"
+    $writeBuildVersion = @'
+import re
+import sys
+from pathlib import Path
+
+version = sys.argv[1]
+if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+    raise SystemExit("Installer version must have three numeric components")
+version_tuple = tuple(int(part) for part in version.split("."))
+source = (
+    "# Generated for the installer build; do not track.\n"
+    "__all__ = ['__version__', '__version_tuple__', 'version', 'version_tuple', '__commit_id__', 'commit_id']\n"
+    f"__version__ = version = {version!r}\n"
+    f"__version_tuple__ = version_tuple = {version_tuple!r}\n"
+    "__commit_id__ = commit_id = None\n"
+)
+Path(sys.argv[2]).write_text(source, encoding="utf-8")
+'@
+    & $python -c $writeBuildVersion $Version $versionSource
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not generate application version metadata for $Version"
+    }
     & $python -m PyInstaller --noconfirm --clean --windowed --onedir `
         --name VideoCaptioner `
         --specpath build `
         --icon $icon `
         --add-data "$resourceDir;resource" `
         --add-data "$qwenRunner;videocaptioner\core\asr" `
+        --add-data "$mimoVadRunner;videocaptioner\core\asr" `
+        --add-data "$mimoAlignmentRunner;videocaptioner\core\asr" `
+        --add-data "$mimoVadDefaults;videocaptioner\core" `
         --add-data "$fireredVadModelDir;models\FireRedVAD" `
         --collect-all qfluentwidgets `
         --collect-submodules modelscope `
@@ -97,6 +135,11 @@ try {
     }
     if (-not (Test-Path $fireredVadBundlePath)) {
         throw "PyInstaller did not bundle FireRedVAD: $fireredVadBundlePath"
+    }
+    foreach ($mimoBundledSource in @($mimoVadRunnerBundlePath, $mimoAlignmentRunnerBundlePath, $mimoVadDefaultsBundlePath)) {
+        if (-not (Test-Path $mimoBundledSource)) {
+            throw "PyInstaller did not bundle MiMo isolated worker source: $mimoBundledSource"
+        }
     }
     if (Test-Path $bundledQwenPythonDir) {
         throw "PyInstaller output unexpectedly contains the bundled Qwen Python directory: $bundledQwenPythonDir"

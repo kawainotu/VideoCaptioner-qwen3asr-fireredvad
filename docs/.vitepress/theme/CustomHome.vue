@@ -7,29 +7,29 @@
         <div class="hero-content">
           <div class="hero-badge">
             <span class="badge-emoji">🎬</span>
-            开源免费 · 用心打造
+            Windows 定制版 · 在线 API 与本地识别
           </div>
           <h1 class="hero-title">
             给你的视频<br>
             <span class="gradient-text">一副好字幕</span>
           </h1>
           <p class="hero-description">
-            不只是转录文字，更懂语义和语境<br>
-            让 AI 帮你把字幕做得像人工精修一样好
+            已支持 MiMo-ASR 在线 API 与新增 Qwen-Audio 云端文件转录<br>
+            Qwen 云端支持自定义热词与上下文增强，同时保留 Qwen3-ASR 本地识别
           </p>
           <div class="hero-stats-inline">
-            <span class="stat-inline">⚡ 4分钟处理14分钟视频</span>
+            <span class="stat-inline">🌐 MiMo-ASR 在线 API</span>
             <span class="stat-divider">·</span>
-            <span class="stat-inline">💰 成本不足 ¥0.01</span>
+            <span class="stat-inline">🌐 Qwen-Audio 云端 API</span>
             <span class="stat-divider">·</span>
-            <span class="stat-inline">🌍 支持99种语言</span>
+            <span class="stat-inline">🏠 Qwen3-ASR 本地识别</span>
           </div>
           <div class="hero-actions">
-            <a href="/guide/getting-started" class="btn-primary">
-              <span>立即开始</span>
+            <a href="https://github.com/kawainotu/VideoCaptioner-qwen3asr-fireredvad/releases/latest" class="btn-primary">
+              <span>下载 Windows 定制版</span>
               <span class="btn-arrow">→</span>
             </a>
-            <a href="https://github.com/WEIFENG2333/VideoCaptioner" class="btn-secondary">
+            <a href="https://github.com/kawainotu/VideoCaptioner-qwen3asr-fireredvad" class="btn-secondary">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
               </svg>
@@ -52,20 +52,20 @@
       <div class="container">
         <div class="stats-grid">
           <div class="stat-item">
-            <div class="stat-number">95%+</div>
-            <div class="stat-label">识别准确度</div>
+            <div class="stat-number">云端+本地</div>
+            <div class="stat-label">多样 ASR 引擎选择</div>
           </div>
           <div class="stat-item">
-            <div class="stat-number">99</div>
-            <div class="stat-label">支持语言</div>
+            <div class="stat-number">多语种</div>
+            <div class="stat-label">语音识别与翻译支持</div>
           </div>
           <div class="stat-item">
-            <div class="stat-number">4min</div>
-            <div class="stat-label">处理14分钟视频</div>
+            <div class="stat-number">毫秒级</div>
+            <div class="stat-label">Qwen 时间戳记录单位</div>
           </div>
           <div class="stat-item">
-            <div class="stat-number">¥0.01</div>
-            <div class="stat-label">单视频成本</div>
+            <div class="stat-number">GPL-3.0</div>
+            <div class="stat-label">开源协议，按需选配</div>
           </div>
         </div>
       </div>
@@ -83,8 +83,8 @@
             <div class="feature-icon-wrap">
               <div class="feature-icon">⚡</div>
             </div>
-            <h3 class="feature-title">快，真的快</h3>
-            <p class="feature-desc">14分钟视频只需4分钟处理。你去泡杯咖啡的功夫，字幕就好了</p>
+            <h3 class="feature-title">MiMo 与 Qwen 在线识别</h3>
+            <p class="feature-desc">新增 Qwen-Audio 云端文件转录（支持原生句级/词级时间戳、热词及上下文增强）；保留 MiMo-ASR 在线 API 与本地字幕对齐。<a href="/config/qwen-filetrans">Qwen 配置</a> · <a href="/config/asr">MiMo 配置</a></p>
           </div>
           <div class="feature-card">
             <div class="feature-icon-wrap">
@@ -104,15 +104,15 @@
             <div class="feature-icon-wrap">
               <div class="feature-icon">💝</div>
             </div>
-            <h3 class="feature-title">完全免费，永久开源</h3>
-            <p class="feature-desc">MIT 协议，代码透明。你的数据在本地，隐私完全掌控在自己手里</p>
+            <h3 class="feature-title">开源软件，按需选择服务</h3>
+            <p class="feature-desc">软件遵循 GPL-3.0 协议。在线识别会上传音频并按服务商规则计费；Qwen3-ASR 可在本地运行。</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon-wrap">
               <div class="feature-icon">🏠</div>
             </div>
             <h3 class="feature-title">老电脑也能用</h3>
-            <p class="feature-desc">不需要昂贵的显卡。有 CPU 就能跑，有 GPU 更快。云端和本地随你选</p>
+            <p class="feature-desc">Qwen-Audio 云端识别无需本地语音模型。MiMo 短字幕需准备本地对齐模型（仅开启 VAD 时需要对应组件）；Qwen3-ASR 支持 CPU 与 GPU。</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon-wrap">
@@ -130,10 +130,10 @@
       <div class="container">
         <div class="cta-content">
           <div class="cta-emoji">✨</div>
-          <h2 class="cta-title">试试看？不用担心，完全免费</h2>
+          <h2 class="cta-title">选择在线 API 或本地识别</h2>
           <p class="cta-description">
-            下载或者直接从源码运行都可以<br>
-            有问题随时在 GitHub 提 Issue，社区会帮你
+            下载本 fork 的 Windows 安装包，或从本仓库源码运行<br>
+            <a href="/config/qwen-filetrans">Qwen 云端配置</a> · <a href="/config/asr">MiMo 与其他识别设置</a>
           </p>
           <div class="cta-buttons">
             <a href="/guide/getting-started" class="btn-cta-primary">

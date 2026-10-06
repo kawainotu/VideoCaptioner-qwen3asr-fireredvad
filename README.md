@@ -6,23 +6,38 @@
   [在线文档](https://weifeng2333.github.io/VideoCaptioner/) · [CLI 使用](#cli-命令行) · [GUI 桌面版](#gui-桌面版) · [Claude Code Skill](#claude-code-skill)
 </div>
 
+## 支持 MiMo 与 Qwen 在线 API
+
+本 fork 的 Windows 定制版同时支持 **MiMo-ASR 在线 API** 和 **Qwen-Audio 云端 ASR API**，并保留 **Qwen3-ASR 本地识别** 与 **FireRedVAD**。两类在线 API 的依赖与运行方式不同：
+
+- **Qwen-Audio 云端 ASR [API]（本次重点新增）**：默认模型为 `qwen-audio-3.1-asr-flash-filetrans`，默认基础地址为 `https://maas.qianwenaiapi.com/api/v1`。程序自动提取本地音视频音轨并流式上传至千问临时 OSS，异步转写并获取原生句子或词级时间戳（毫秒单位）。**无需单独配置对象存储，无需下载本地识别、VAD 或对齐模型**（视频提取音频需 FFmpeg）。支持自定义热词（支持权重）与上下文增强（最多 400 字符）。在线识别需要服务商 API Key，并按服务商规则计费（“测试连接”仅验证上传权限，不提交收费识别）。
+- **MiMo-ASR 在线 API（既有支持）**：可配置渠道地址、API Key 和模型。短字幕生成依赖本地共享运行环境与 `Qwen3-ForcedAligner-0.6B` 对齐模型；VAD 默认开启但可关闭，仅在开启时需要本地 VAD 组件（支持 Silero / FireRedVAD）。已有组件可直接复用，无需下载 Qwen3-ASR 识别权重。
+
+**Windows 定制版下载**：前往 [Releases 最新发布页面](https://github.com/kawainotu/VideoCaptioner-qwen3asr-fireredvad/releases/latest) 获取安装包 `VideoCaptioner-Setup-win64-v1.4.2-qwen3-asr-fireredvad-1.4.exe`。
+
+**详细配置指南**：参见 [Qwen-Audio 云端配置](docs/config/qwen-filetrans.md) 与 [MiMo-ASR 配置说明](docs/config/asr.md#小米-mimo-asr-api-配置说明)。
+
 ## 安装
 
+> [!IMPORTANT]
+> **注意**：下方 `pip install videocaptioner` 命令安装的是**上游官方发布版**。若要使用本 fork 提供的 Windows 定制功能（Qwen 云端文件转录、MiMo 在线 API、Qwen3-ASR 本地识别与 FireRedVAD 等），请直接下载 [Windows 定制版安装包 (Releases)](https://github.com/kawainotu/VideoCaptioner-qwen3asr-fireredvad/releases/latest)，或从[本仓库源码](#开发)在本地运行。
+
 ```bash
-pip install videocaptioner          # 安装 CLI + GUI 桌面版
+pip install videocaptioner          # 仅安装上游官方 CLI + GUI 版本
 ```
 
 免费功能（必剪语音识别、必应/谷歌翻译）**无需任何配置，安装即用**。
 
 ## 本 fork 的改动
 
-此 fork 提供面向 Windows 的 Qwen3-ASR 与 FireRedVAD 定制安装包：
+此 fork 提供面向 Windows 的本地与在线语音识别定制安装包：
 
-- 新增 Qwen3-ASR 本地转录，支持 CUDA、CPU 和自动设备选择。
-- 在“管理组件”中下载并管理 Qwen3-ASR 模型、时间戳对齐模型和独立运行环境；模型支持从 Hugging Face 获取。
-- 新增 FireRedVAD。安装包内置离线权重，并提供 Silero VAD / FireRedVAD 切换、阈值和切分参数设置。
-- 改进 Qwen3-ASR 的语言选择、转录稳定性和低显存模式；识别与时间戳对齐会分阶段加载模型。
-- Windows 安装器会打包 Qwen3-ASR 运行程序与 FireRedVAD 权重；缺少 PyInstaller 时，构建脚本会自动安装所需版本。
+- **新增 Qwen-Audio 在线文件转录 API**：支持异步上传、原生句级/词级时间戳（毫秒单位）、自定义热词（含权重）与上下文增强，无需本地识别、VAD 或对齐模型，GUI 与 CLI 均可使用。
+- **转录页面滚动与交互修复**：固定顶部操作栏，媒体信息与完整设置表单自适应滚动，小窗口下可正常配置并使用“测试连接”；热词与上下文在语音转录页面的设置表单中编辑，保留光标和撤销历史，并与全局设置实时双向同步。
+- **保留 MiMo-ASR 在线 API 与修复**：支持自定义服务渠道、频率调度与本地字幕对齐；长音频中“好。”“嗯。”等严格受限短应答回退使用已检测的 VAD 句级边界并标记需复核，避免整段字幕导出失败。
+- **保留 Qwen3-ASR 本地识别**：支持 CUDA、CPU 和自动设备选择，提供官方轻量 `0.6B` 与 `1.7B` 模型管理。
+- **保留 FireRedVAD**：内置离线权重，支持 Silero VAD 与 FireRedVAD 切换及切分参数调优。
+- **组件管理与安装包打包**：Windows 安装包内置 Qwen3-ASR 运行程序与 FireRedVAD 权重，支持从国内镜像下载环境与模型。
 
 Windows 定制版安装包与更新说明见 [本 fork 的 Releases](https://github.com/kawainotu/VideoCaptioner-qwen3asr-fireredvad/releases)。首次使用 Qwen3-ASR 前，需要在“管理组件”下载模型；模型文件约 6.5 GB。
 
@@ -31,6 +46,9 @@ Windows 定制版安装包与更新说明见 [本 fork 的 Releases](https://git
 ```bash
 # 语音转录（免费，无需 API Key）
 videocaptioner transcribe video.mp4 --asr bijian
+
+# Qwen-Audio 云端识别（需在配置中填写 qwen_filetrans.api_key）
+videocaptioner transcribe video.mp4 --asr qwen-filetrans
 
 # 字幕翻译（免费必应翻译）
 videocaptioner subtitle input.srt --translator bing --target-language en
@@ -61,7 +79,7 @@ videocaptioner config set llm.model gpt-4o-mini
 | 命令 | 说明 |
 |------|------|
 | `gui` | 打开桌面版。也可以直接运行 `videocaptioner-gui` |
-| `transcribe` | 语音转字幕。引擎：`qwen3-asr`（Windows 本地）、`faster-whisper`、`whisper-api`、`bijian`（免费）、`jianying`（免费）、`whisper-cpp` |
+| `transcribe` | 语音转字幕。引擎：`qwen-filetrans`（Qwen-Audio 在线 API）、`qwen3-asr`（Windows 本地）、`faster-whisper`、`whisper-api`、`bijian`（免费）、`jianying`（免费）、`whisper-cpp` |
 | `subtitle` | 字幕优化/翻译。翻译服务：`llm`、`bing`（免费）、`google`（免费） |
 | `dub` | 根据字幕生成配音音轨或配音视频 |
 | `synthesize` | 字幕烧录到视频（软字幕/硬字幕） |
@@ -159,8 +177,8 @@ cp skills/SKILL.md ~/.claude/skills/videocaptioner/SKILL.md
 ## 开发
 
 ```bash
-git clone https://github.com/WEIFENG2333/VideoCaptioner.git
-cd VideoCaptioner
+git clone https://github.com/kawainotu/VideoCaptioner-qwen3asr-fireredvad.git
+cd VideoCaptioner-qwen3asr-fireredvad
 uv sync && uv run videocaptioner     # 运行 GUI
 uv run videocaptioner --help          # 运行 CLI
 uv run pyright                        # 类型检查

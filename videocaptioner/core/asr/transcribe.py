@@ -8,6 +8,7 @@ from videocaptioner.core.asr.faster_whisper import FasterWhisperASR
 from videocaptioner.core.asr.jianying import JianYingASR
 from videocaptioner.core.asr.mimo_asr import MiMoASR
 from videocaptioner.core.asr.qwen3_asr import Qwen3ASR
+from videocaptioner.core.asr.qwen_filetrans_asr import QwenFileTransASR
 from videocaptioner.core.asr.whisper_api import WhisperAPI
 from videocaptioner.core.asr.whisper_cpp import WhisperCppASR
 from videocaptioner.core.entities import TranscribeConfig, TranscribeModelEnum
@@ -42,8 +43,8 @@ def transcribe(audio_path: str, config: TranscribeConfig, callback=None, on_asr_
     # Run transcription
     asr_data = asr.run(callback=callback)
 
-    # Optimize subtitle timing if not using word timestamps (bypass for MiMo to preserve exact VAD chunk timing)
-    if not config.need_word_time_stamp and config.transcribe_model != TranscribeModelEnum.MIMO_ASR:
+    # Preserve native cloud/VAD timing; optimize other sentence-level results.
+    if not config.need_word_time_stamp and config.transcribe_model not in (TranscribeModelEnum.MIMO_ASR, TranscribeModelEnum.QWEN_FILETRANS):
         asr_data.optimize_timing()
 
     return asr_data
@@ -72,6 +73,21 @@ def _create_asr_instance(audio_path: str, config: TranscribeConfig) -> Union[Chu
 
     elif model_type == TranscribeModelEnum.WHISPER_API:
         return _create_whisper_api_asr(audio_path, config)
+
+    elif model_type == TranscribeModelEnum.QWEN_FILETRANS:
+        return QwenFileTransASR(
+            audio_input=audio_path,
+            api_key=config.qwen_filetrans_api_key,
+            base_url=config.qwen_filetrans_api_base,
+            model=config.qwen_filetrans_model,
+            language=config.transcribe_language,
+            need_word_time_stamp=config.need_word_time_stamp,
+            task_timeout=config.qwen_filetrans_task_timeout,
+            hotwords=config.qwen_filetrans_hotwords,
+            vocabulary_id=config.qwen_filetrans_vocabulary_id,
+            context=config.qwen_filetrans_context,
+            use_cache=True,
+        )
 
     elif model_type == TranscribeModelEnum.MIMO_ASR:
         return _create_mimo_asr(audio_path, config)

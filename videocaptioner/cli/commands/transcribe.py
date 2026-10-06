@@ -82,6 +82,7 @@ def run(args: Namespace, config: dict) -> int:
     asr_map = {
         "faster-whisper": TranscribeModelEnum.FASTER_WHISPER,
         "qwen3-asr": TranscribeModelEnum.QWEN3_ASR,
+        "qwen-filetrans": TranscribeModelEnum.QWEN_FILETRANS,
         "whisper-api": TranscribeModelEnum.WHISPER_API,
         "bijian": TranscribeModelEnum.BIJIAN,
         "jianying": TranscribeModelEnum.JIANYING,
@@ -106,6 +107,13 @@ def run(args: Namespace, config: dict) -> int:
         transcribe_model=asr_map.get(asr_engine),
         transcribe_language=language if language != "auto" else "",
         need_word_time_stamp=getattr(args, "word_timestamps", False),
+        qwen_filetrans_api_key=get(config, "qwen_filetrans.api_key", ""),
+        qwen_filetrans_api_base=get(config, "qwen_filetrans.api_base", "https://maas.qianwenaiapi.com/api/v1"),
+        qwen_filetrans_model=get(config, "qwen_filetrans.model", "qwen-audio-3.1-asr-flash-filetrans"),
+        qwen_filetrans_task_timeout=get(config, "qwen_filetrans.task_timeout", 1800),
+        qwen_filetrans_hotwords=get(config, "qwen_filetrans.hotwords", ""),
+        qwen_filetrans_vocabulary_id=get(config, "qwen_filetrans.vocabulary_id", ""),
+        qwen_filetrans_context=get(config, "qwen_filetrans.context", ""),
         # FasterWhisper options
         faster_whisper_model=fw_model_enum,
         faster_whisper_model_dir=None,

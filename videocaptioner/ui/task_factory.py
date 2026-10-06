@@ -91,8 +91,10 @@ class TaskFactory:
         else:
             trans_lang = LANGUAGES[cfg.transcribe_language.value.value]
             need_word_time_stamp = (
-                cfg.transcribe_model.value == TranscribeModelEnum.QWEN3_ASR
-                and cfg.qwen_asr_word_timestamps.value
+                (cfg.transcribe_model.value == TranscribeModelEnum.QWEN3_ASR
+                 and cfg.qwen_asr_word_timestamps.value)
+                or (cfg.transcribe_model.value == TranscribeModelEnum.QWEN_FILETRANS
+                    and cfg.qwen_filetrans_word_timestamps.value)
             )
             output_path = str(Path(file_path).parent / f"{file_name}.srt")
 
@@ -108,6 +110,12 @@ class TaskFactory:
             whisper_api_base=cfg.whisper_api_base.value,
             whisper_api_model=cfg.whisper_api_model.value,
             whisper_api_prompt=cfg.whisper_api_prompt.value,
+            qwen_filetrans_api_key=cfg.qwen_filetrans_api_key.value,
+            qwen_filetrans_api_base=cfg.qwen_filetrans_api_base.value,
+            qwen_filetrans_model=cfg.qwen_filetrans_model.value,
+            qwen_filetrans_hotwords=cfg.qwen_filetrans_hotwords.value,
+            qwen_filetrans_vocabulary_id=cfg.qwen_filetrans_vocabulary_id.value,
+            qwen_filetrans_context=cfg.qwen_filetrans_context.value,
             # MiMo-ASR 配置
             mimo_api_key=cfg.mimo_api_key.value,
             mimo_api_base=cfg.mimo_api_base.value,

@@ -34,6 +34,9 @@ CONFIG_FILE = CONFIG_DIR / "config.toml"
 # Environment variable mappings: env var name → config dotted key
 # Supports both OpenAI standard names and VIDEOCAPTIONER_ prefixed names
 ENV_MAP: Dict[str, str] = {
+    "VIDEOCAPTIONER_QWEN_FILETRANS_API_KEY": "qwen_filetrans.api_key",
+    "VIDEOCAPTIONER_QWEN_FILETRANS_API_BASE": "qwen_filetrans.api_base",
+    "VIDEOCAPTIONER_QWEN_FILETRANS_MODEL": "qwen_filetrans.model",
     # OpenAI standard (most tools recognize these)
     "OPENAI_API_KEY": "llm.api_key",
     "OPENAI_BASE_URL": "llm.api_base",
@@ -68,6 +71,15 @@ DEFAULTS: Dict[str, Any] = {
         "api_key": "",
         "api_base": "https://api.openai.com/v1",
         "model": "gpt-4o-mini",
+    },
+    "qwen_filetrans": {
+        "api_key": "",
+        "api_base": "https://maas.qianwenaiapi.com/api/v1",
+        "model": "qwen-audio-3.1-asr-flash-filetrans",
+        "task_timeout": 1800,
+        "hotwords": "",
+        "vocabulary_id": "",
+        "context": "",
     },
     "whisper_api": {
         "api_key": "",

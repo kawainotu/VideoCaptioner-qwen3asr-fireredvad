@@ -180,6 +180,21 @@ def validate_transcribe(config: dict) -> bool:
     """Validate config for transcribe command."""
     asr = get(config, "transcribe.asr", "faster-whisper")
 
+    if asr == "qwen-filetrans":
+        if not get(config, "qwen_filetrans.api_key"):
+            output.config_missing_error("Qwen cloud ASR API key", "qwen_filetrans.api_key", "VIDEOCAPTIONER_QWEN_FILETRANS_API_KEY", "--qwen-filetrans-key")
+            return False
+        from videocaptioner.core.asr.qwen_filetrans_asr import normalize_base_url, validate_language, validate_recognition_options
+        try:
+            normalize_base_url(get(config, "qwen_filetrans.api_base", "https://maas.qianwenaiapi.com/api/v1"))
+            validate_language(get(config, "transcribe.language", "auto"))
+            validate_recognition_options(get(config, "qwen_filetrans.hotwords", ""),
+                                         get(config, "qwen_filetrans.vocabulary_id", ""),
+                                         get(config, "qwen_filetrans.context", ""))
+        except ValueError as error:
+            output.error(str(error))
+            return False
+        return True
     if asr == "whisper-api":
         return validate_whisper_api(config)
     if asr == "faster-whisper":

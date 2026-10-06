@@ -1,6 +1,7 @@
 from typing import Optional
 
 from PyQt5.QtWidgets import (
+    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -14,6 +15,7 @@ from videocaptioner.core.utils.platform_utils import is_macos, is_windows
 from .FasterWhisperSettingWidget import FasterWhisperSettingWidget
 from .MiMoASRSettingWidget import MiMoASRSettingWidget
 from .Qwen3ASRSettingWidget import Qwen3ASRSettingWidget
+from .QwenFileTransSettingWidget import QwenFileTransSettingWidget
 from .WhisperAPISettingWidget import WhisperAPISettingWidget
 from .WhisperCppSettingWidget import WhisperCppSettingWidget
 
@@ -35,6 +37,7 @@ class TranscriptionSettingCard(QWidget):
         self.whisper_cpp_widget = WhisperCppSettingWidget(self)
         self.whisper_api_widget = WhisperAPISettingWidget(self)
         self.mimo_asr_widget = MiMoASRSettingWidget(self)
+        self.qwen_filetrans_widget = QwenFileTransSettingWidget(self)
 
         # FasterWhisper 在 macOS 上不可用
         self.faster_whisper_widget: Optional[FasterWhisperSettingWidget] = None
@@ -48,6 +51,7 @@ class TranscriptionSettingCard(QWidget):
         self.stacked_widget.addWidget(self.whisper_cpp_widget)
         self.stacked_widget.addWidget(self.whisper_api_widget)
         self.stacked_widget.addWidget(self.mimo_asr_widget)
+        self.stacked_widget.addWidget(self.qwen_filetrans_widget)
         if self.faster_whisper_widget is not None:
             self.stacked_widget.addWidget(self.faster_whisper_widget)
         if self.qwen3_asr_widget is not None:
@@ -61,6 +65,9 @@ class TranscriptionSettingCard(QWidget):
             self.stacked_widget.setCurrentWidget(self.whisper_cpp_widget)
         elif value == TranscribeModelEnum.WHISPER_API.value:
             self.stacked_widget.setCurrentWidget(self.whisper_api_widget)
+        elif value == TranscribeModelEnum.QWEN_FILETRANS.value:
+            self.qwen_filetrans_widget.activate()
+            self.stacked_widget.setCurrentWidget(self.qwen_filetrans_widget)
         elif value == TranscribeModelEnum.MIMO_ASR.value:
             self.stacked_widget.setCurrentWidget(self.mimo_asr_widget)
         elif value == TranscribeModelEnum.FASTER_WHISPER.value:
@@ -69,3 +76,14 @@ class TranscriptionSettingCard(QWidget):
             self.stacked_widget.setCurrentWidget(self.qwen3_asr_widget)
         else:
             self.stacked_widget.setCurrentWidget(self.empty_widget)
+        # QStackedWidget otherwise uses the largest hidden page's minimum height.
+        current = self.stacked_widget.currentWidget()
+        minimum = current.minimumSizeHint().expandedTo(current.minimumSize())
+        height = max(0, minimum.height())
+        if hasattr(current, "scrollArea") or hasattr(current, "scroll_area"):
+            height = max(360, height)  # Give existing nested forms several usable rows.
+        self.stacked_widget.setMinimumHeight(height)
+        self.stacked_widget.setSizePolicy(
+            self.stacked_widget.sizePolicy().horizontalPolicy(), QSizePolicy.Ignored
+        )
+        self.updateGeometry()

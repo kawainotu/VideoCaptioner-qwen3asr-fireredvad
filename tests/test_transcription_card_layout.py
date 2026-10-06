@@ -25,7 +25,7 @@ class TranscriptionCardStatusTests(unittest.TestCase):
             start_button=Mock(), status_label=Mock(), button_widget=Mock(),
             progress_ring=Mock(), finished=Mock(), tr=lambda text: text,
             transcription_interface=SimpleNamespace(is_processing=True),
-            parent=Mock(),
+            parent=Mock(), window=Mock(),
         )
         self.card.set_status_text = lambda *args: method("set_status_text")(self.card, *args)
 

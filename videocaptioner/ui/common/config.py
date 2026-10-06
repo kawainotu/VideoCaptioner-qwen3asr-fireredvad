@@ -321,6 +321,14 @@ class Config(QConfig):
     whisper_api_model = OptionsConfigItem("WhisperAPI", "WhisperApiModel", "")
     whisper_api_prompt = ConfigItem("WhisperAPI", "WhisperApiPrompt", "")
 
+    qwen_filetrans_api_base = ConfigItem("QwenFileTrans", "ApiBase", "https://maas.qianwenaiapi.com/api/v1")
+    qwen_filetrans_api_key = ConfigItem("QwenFileTrans", "ApiKey", "")
+    qwen_filetrans_model = ConfigItem("QwenFileTrans", "Model", "qwen-audio-3.1-asr-flash-filetrans")
+    qwen_filetrans_hotwords = ConfigItem("QwenFileTrans", "Hotwords", "")
+    qwen_filetrans_vocabulary_id = ConfigItem("QwenFileTrans", "VocabularyId", "")
+    qwen_filetrans_context = ConfigItem("QwenFileTrans", "Context", "")
+    qwen_filetrans_word_timestamps = ConfigItem("QwenFileTrans", "WordTimestamps", False, BoolValidator())
+
     # ------------------- MiMo-ASR 配置 -------------------
     mimo_api_base = ConfigItem("MiMoASR", "MiMoApiBase", "")
     mimo_api_key = ConfigItem("MiMoASR", "MiMoApiKey", "")

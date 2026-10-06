@@ -20,10 +20,10 @@ _LAST_CONNECTED_APP = None
 
 
 def cancel_active_mimo_transcriptions():
-    """Stop MiMo runners even when the app quits without closing child pages."""
+    """Stop cancellable cloud runners when the app quits without closing child pages."""
     for thread in tuple(_ACTIVE_TRANSCRIPT_THREADS):
         config = thread.task.transcribe_config
-        if config and config.transcribe_model == TranscribeModelEnum.MIMO_ASR:
+        if config and config.transcribe_model in (TranscribeModelEnum.MIMO_ASR, TranscribeModelEnum.QWEN_FILETRANS):
             thread.cancel()
 
 

@@ -221,6 +221,14 @@ def _user_facing_config(config_data: dict) -> dict:
             "api_base": config_data["llm"]["api_base"],
             "model": config_data["llm"]["model"],
         },
+        "qwen_filetrans": {
+            "api_key": config_data["qwen_filetrans"]["api_key"],
+            "api_base": config_data["qwen_filetrans"]["api_base"],
+            "model": config_data["qwen_filetrans"]["model"],
+            "hotwords": config_data["qwen_filetrans"]["hotwords"],
+            "vocabulary_id": config_data["qwen_filetrans"]["vocabulary_id"],
+            "context": config_data["qwen_filetrans"]["context"],
+        },
         "whisper_api": {
             "api_key": config_data["whisper_api"]["api_key"],
             "api_base": config_data["whisper_api"]["api_base"],

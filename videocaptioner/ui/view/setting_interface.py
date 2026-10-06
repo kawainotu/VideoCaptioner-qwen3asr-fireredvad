@@ -41,6 +41,7 @@ from videocaptioner.ui.components.MiMoASRSettingWidget import (
     MiMoConnectionThread,
 )
 from videocaptioner.ui.components.MiMoRateSettingWidget import MiMoRateSettingWidget
+from videocaptioner.ui.components.QwenFileTransSettingWidget import QwenFileTransSettingWidget
 from videocaptioner.ui.components.MiMoVADSettingWidget import MiMoVADSettingWidget
 from videocaptioner.ui.components.MiMoAlignmentSettingWidget import MiMoAlignmentSettingWidget
 
@@ -497,6 +498,9 @@ class SettingInterface(ScrollArea):
         self.whisperApiModelCard.setVisible(False)
         self.checkWhisperConnectionCard.setVisible(False)
 
+        self.qwenFileTransWidget = QwenFileTransSettingWidget(self)
+        self.qwenFileTransWidget.setVisible(False)
+
         # MiMo API Base URL
         self.mimoApiBaseCard = LineEditSettingCard(
             cfg.mimo_api_base,
@@ -666,6 +670,7 @@ class SettingInterface(ScrollArea):
         self.transcribeGroup.addSettingCard(self.whisperApiKeyCard)
         self.transcribeGroup.addSettingCard(self.whisperApiModelCard)
         self.transcribeGroup.addSettingCard(self.checkWhisperConnectionCard)
+        self.transcribeGroup.addSettingCard(self.qwenFileTransWidget)
         # 添加 MiMo ASR 配置卡片
         self.transcribeGroup.addSettingCard(self.mimoApiBaseCard)
         self.transcribeGroup.addSettingCard(self.mimoApiKeyCard)
@@ -979,6 +984,11 @@ class SettingInterface(ScrollArea):
             self.checkMiMoConnectionCard,
         ]
 
+        is_qwen_filetrans = model_name == TranscribeModelEnum.QWEN_FILETRANS.value
+        self.qwenFileTransWidget.setVisible(is_qwen_filetrans)
+        if is_qwen_filetrans:
+            self.qwenFileTransWidget.activate()
+
         # 根据选择的模型显示/隐藏配置
         is_whisper_api = model_name == TranscribeModelEnum.WHISPER_API.value
         for card in whisper_api_cards:
@@ -1162,6 +1172,7 @@ class SettingInterface(ScrollArea):
     def closeEvent(self, event):
         """关闭时安全终止自身发起的 MiMo 测试线程"""
         self._stop_own_mimo_worker()
+        self.qwenFileTransWidget.stop()
         super().closeEvent(event)
 
 

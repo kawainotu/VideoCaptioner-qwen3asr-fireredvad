@@ -126,6 +126,7 @@ class TranscribeModelEnum(Enum):
     JIANYING = "J 接口"
     WHISPER_API = "Whisper [API] ✨"
     MIMO_ASR = "MiMo-ASR [API] ✨"
+    QWEN_FILETRANS = "Qwen-Audio 云端 ASR [API] ✨"
     FASTER_WHISPER = "FasterWhisper ✨"
     QWEN3_ASR = "Qwen3-ASR ✨"
     WHISPER_CPP = "WhisperCpp"
@@ -530,6 +531,10 @@ ASR_LANGUAGE_CAPABILITIES: dict[TranscribeModelEnum, ASRLanguageCapability] = {
         supported_languages=_get_all_languages_except_auto(),
         supports_auto=True,
     ),
+    TranscribeModelEnum.QWEN_FILETRANS: ASRLanguageCapability(
+        supported_languages=[lang for lang in TranscribeLanguageEnum if LANGUAGES.get(lang.value) in {"zh", "en", "ja", "ko", "vi", "th", "id", "ms", "tl", "hi", "ar", "fr", "de", "es", "pt", "ru", "it", "nl", "sv", "da", "fi", "no", "el", "pl", "cs", "hu", "ro", "bg", "hr", "sk"}],
+        supports_auto=True,
+    ),
     TranscribeModelEnum.MIMO_ASR: ASRLanguageCapability(
         supported_languages=[
             TranscribeLanguageEnum.CHINESE,
@@ -594,6 +599,14 @@ class TranscribeConfig:
     whisper_api_base: Optional[str] = None
     whisper_api_model: Optional[str] = None
     whisper_api_prompt: Optional[str] = None
+    # Qwen 云端文件转录配置
+    qwen_filetrans_api_key: Optional[str] = None
+    qwen_filetrans_api_base: str = "https://maas.qianwenaiapi.com/api/v1"
+    qwen_filetrans_model: str = "qwen-audio-3.1-asr-flash-filetrans"
+    qwen_filetrans_task_timeout: float = 1800
+    qwen_filetrans_hotwords: str = ""
+    qwen_filetrans_vocabulary_id: str = ""
+    qwen_filetrans_context: str = ""
     # MiMo-ASR 配置
     mimo_api_key: Optional[str] = None
     mimo_api_base: Optional[str] = None
@@ -677,6 +690,10 @@ class TranscribeConfig:
             if self.whisper_api_prompt:
                 lines.append(f"Prompt: {self.whisper_api_prompt[:30]}...")
 
+        elif self.transcribe_model == TranscribeModelEnum.QWEN_FILETRANS:
+            lines.append(f"API Key: {self._mask_key(self.qwen_filetrans_api_key)}")
+            lines.append(f"API Model: {self.qwen_filetrans_model}")
+            lines.append("Timestamps: native cloud timestamps")
         elif self.transcribe_model == TranscribeModelEnum.MIMO_ASR:
             lines.append(f"API Base: {self.mimo_api_base}")
             lines.append(f"API Key: {self._mask_key(self.mimo_api_key)}")

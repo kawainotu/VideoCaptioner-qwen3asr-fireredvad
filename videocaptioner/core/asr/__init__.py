@@ -4,6 +4,7 @@ from .faster_whisper import FasterWhisperASR
 from .jianying import JianYingASR
 from .mimo_asr import MiMoASR
 from .qwen3_asr import Qwen3ASR
+from .qwen_filetrans_asr import QwenFileTransASR
 from .status import ASRStatus
 from .transcribe import transcribe
 from .whisper_api import WhisperAPI
@@ -16,6 +17,7 @@ __all__ = [
     "JianYingASR",
     "MiMoASR",
     "Qwen3ASR",
+    "QwenFileTransASR",
     "WhisperAPI",
     "WhisperCppASR",
     "transcribe",

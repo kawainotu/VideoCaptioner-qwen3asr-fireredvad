@@ -101,11 +101,19 @@ def _build_transcribe_parser(subparsers) -> None:
     asr = p.add_argument_group("ASR options")
     asr.add_argument(
         "--asr",
-        choices=["bijian", "jianying", "whisper-api", "whisper-cpp", "qwen3-asr"],
+        choices=["bijian", "jianying", "whisper-api", "whisper-cpp", "qwen3-asr", "qwen-filetrans"],
         help="ASR engine (default: bijian). "
              "bijian/jianying: free, no setup, Chinese & English only. "
+             "qwen-filetrans: Qwen cloud file ASR (API key required). "
              "For local Qwen3-ASR use qwen3-asr after installing it from the GUI",
     )
+    for option in ("key", "base", "model"):
+        asr.add_argument(f"--qwen-filetrans-{option}", help=f"Qwen cloud file ASR API {option}")
+    hotwords = asr.add_mutually_exclusive_group()
+    hotwords.add_argument("--qwen-filetrans-hotwords", help="One hotword per line, optionally term | weight")
+    hotwords.add_argument("--qwen-filetrans-hotwords-file", metavar="PATH", help="UTF-8 text file with one hotword per line")
+    asr.add_argument("--qwen-filetrans-vocabulary-id", help="Existing cloud vocabulary ID; merged with inline hotwords")
+    asr.add_argument("--qwen-filetrans-context", help="Recognition context, at most 400 characters")
     asr.add_argument("--language", metavar="CODE",
                      help="Source language as ISO 639-1 code, or 'auto' (default: auto)")
     asr.add_argument("--word-timestamps", action="store_true",
@@ -347,10 +355,17 @@ def _build_process_parser(subparsers) -> None:
     pipe.add_argument("--dub", action="store_true", help="Generate dubbed audio/video after subtitle processing")
     pipe.add_argument("--dub-only", action="store_true", help="Output only the dubbed result, skipping subtitle burn/embedding")
 
-    pipe.add_argument("--asr", choices=["bijian", "jianying", "whisper-api", "whisper-cpp", "qwen3-asr"],
+    pipe.add_argument("--asr", choices=["bijian", "jianying", "whisper-api", "whisper-cpp", "qwen3-asr", "qwen-filetrans"],
                       help="ASR engine (default: bijian)")
     pipe.add_argument("--language", metavar="CODE",
                       help="Source language as ISO 639-1 code, or 'auto' (default: auto)")
+    for option in ("key", "base", "model"):
+        pipe.add_argument(f"--qwen-filetrans-{option}", help=f"Qwen cloud file ASR API {option}")
+    hotwords = pipe.add_mutually_exclusive_group()
+    hotwords.add_argument("--qwen-filetrans-hotwords", help="One hotword per line, optionally term | weight")
+    hotwords.add_argument("--qwen-filetrans-hotwords-file", metavar="PATH", help="UTF-8 text file with one hotword per line")
+    pipe.add_argument("--qwen-filetrans-vocabulary-id", help="Existing cloud vocabulary ID; merged with inline hotwords")
+    pipe.add_argument("--qwen-filetrans-context", help="Recognition context, at most 400 characters")
     pipe.add_argument("--whisper-api-key", metavar="KEY", help="Whisper API key (for --asr whisper-api)")
     pipe.add_argument("--translator", choices=["llm", "bing", "google"],
                       help="Translation service (default: bing). bing and google are free")
@@ -449,7 +464,7 @@ def _build_config_parser(subparsers) -> None:
     init_p.add_argument("--llm-api-key", metavar="KEY", help="LLM API key")
     init_p.add_argument("--llm-api-base", metavar="URL", help="LLM API base URL")
     init_p.add_argument("--llm-model", metavar="NAME", help="LLM model")
-    init_p.add_argument("--asr", choices=["bijian", "jianying", "whisper-api", "whisper-cpp", "qwen3-asr"], help="Default ASR engine")
+    init_p.add_argument("--asr", choices=["bijian", "jianying", "whisper-api", "whisper-cpp", "qwen3-asr", "qwen-filetrans"], help="Default ASR engine")
     init_p.add_argument("--translator", choices=["llm", "bing", "google"], help="Default translation service")
     init_p.add_argument("--target-language", "--to", dest="target_language", metavar="CODE", help=argparse.SUPPRESS)
     init_p.add_argument("--no-optimize", action="store_true", help="Disable AI subtitle polish by default")
@@ -533,6 +548,19 @@ def _build_cli_overrides(args: argparse.Namespace) -> dict:
     _set("llm.api_key", getattr(args, "api_key", None))
     _set("llm.api_base", getattr(args, "api_base", None))
     _set("llm.model", getattr(args, "model", None))
+
+    _set("qwen_filetrans.api_key", getattr(args, "qwen_filetrans_key", None))
+    _set("qwen_filetrans.api_base", getattr(args, "qwen_filetrans_base", None))
+    _set("qwen_filetrans.model", getattr(args, "qwen_filetrans_model", None))
+    _set("qwen_filetrans.vocabulary_id", getattr(args, "qwen_filetrans_vocabulary_id", None))
+    _set("qwen_filetrans.context", getattr(args, "qwen_filetrans_context", None))
+    _set("qwen_filetrans.hotwords", getattr(args, "qwen_filetrans_hotwords", None))
+    hotwords_file = getattr(args, "qwen_filetrans_hotwords_file", None)
+    if hotwords_file:
+        try:
+            _set("qwen_filetrans.hotwords", Path(hotwords_file).read_text(encoding="utf-8-sig"))
+        except (OSError, UnicodeError):
+            raise ValueError("Unable to read Qwen hotwords file; select an accessible UTF-8 text file") from None
 
     # Whisper API
     _set("whisper_api.api_key", getattr(args, "whisper_api_key", None))

@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -31,6 +32,7 @@ from qfluentwidgets import (
     ProgressRing,
     PushButton,
     RoundMenu,
+    ScrollArea,
     TransparentDropDownPushButton,
     setFont,
 )
@@ -290,6 +292,13 @@ class VideoInfoCard(CardWidget):
 
     def on_start_button_clicked(self):
         """开始转录按钮点击事件"""
+        if cfg.transcribe_model.value == TranscribeModelEnum.QWEN_FILETRANS:
+            try:
+                self.transcription_interface.transcription_setting_card.qwen_filetrans_widget.validate_options()
+            except ValueError as error:
+                InfoBar.error(self.tr("识别增强配置无效"), str(error),
+                              duration=INFOBAR_DURATION_ERROR, parent=self.window())
+                return
         self.progress_ring.setValue(0)
         self.progress_ring.show()
         self.start_button.setDisabled(True)
@@ -349,7 +358,7 @@ class VideoInfoCard(CardWidget):
             self.tr("转录失败"),
             self.tr(error),
             duration=INFOBAR_DURATION_ERROR,
-            parent=self.parent().parent(),
+            parent=self.window(),
         )
 
     def on_transcript_finished(self, task):
@@ -374,7 +383,7 @@ class VideoInfoCard(CardWidget):
     def stop(self):
         if hasattr(self, "transcript_thread"):
             config = self.transcript_thread.task.transcribe_config
-            if config and config.transcribe_model == TranscribeModelEnum.MIMO_ASR:
+            if config and config.transcribe_model in (TranscribeModelEnum.MIMO_ASR, TranscribeModelEnum.QWEN_FILETRANS):
                 self.transcript_thread.cancel()
             else:
                 self.transcript_thread.terminate()
@@ -405,12 +414,26 @@ class TranscriptionInterface(QWidget):
         # 添加命令栏
         self._setup_command_bar()
 
+        # Keep the command bar visible while the complete form can scroll.
+        self.content_scroll_area = ScrollArea(self)
+        self.content_scroll_area.setWidgetResizable(True)
+        self.content_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.content_widget = QWidget(self)
+        self.content_layout = QVBoxLayout(self.content_widget)
+        self.content_layout.setContentsMargins(0, 0, 12, 0)
+        self.content_layout.setSpacing(20)
+        self.content_layout.setSizeConstraint(QLayout.SetMinimumSize)
+
         self.video_info_card = VideoInfoCard(self)
-        self.main_layout.addWidget(self.video_info_card)
+        self.content_layout.addWidget(self.video_info_card)
 
         # 添加转录设置卡片
         self.transcription_setting_card = TranscriptionSettingCard(self)
-        self.main_layout.addWidget(self.transcription_setting_card)
+        self.content_layout.addWidget(self.transcription_setting_card)
+        self.content_layout.addStretch(1)
+        self.content_scroll_area.setWidget(self.content_widget)
+        self.content_scroll_area.enableTransparentBackground()
+        self.main_layout.addWidget(self.content_scroll_area, 1)
 
     def _setup_command_bar(self):
         """设置命令栏"""
@@ -439,6 +462,7 @@ class TranscriptionInterface(QWidget):
             if (
                 model == TranscribeModelEnum.WHISPER_API
                 or model == TranscribeModelEnum.MIMO_ASR
+                or model == TranscribeModelEnum.QWEN_FILETRANS
                 or model == TranscribeModelEnum.BIJIAN
                 or model == TranscribeModelEnum.JIANYING
             ):
@@ -606,6 +630,7 @@ class TranscriptionInterface(QWidget):
 
     def closeEvent(self, event):
         self.video_info_card.stop()
+        self.transcription_setting_card.qwen_filetrans_widget.stop()
         super().closeEvent(event)
 
 

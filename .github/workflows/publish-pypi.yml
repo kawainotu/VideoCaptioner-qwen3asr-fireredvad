@@ -11,6 +11,8 @@ permissions:
 
 jobs:
   quality:
+    # PyPI publishing belongs to upstream; this fork publishes Windows releases manually.
+    if: github.repository == 'WEIFENG2333/VideoCaptioner'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

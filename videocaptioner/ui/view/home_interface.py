@@ -117,6 +117,11 @@ class HomeInterface(QWidget):
         # 当堆叠控件的当前索引改变时，更新分段控件的当前项
         widget = self.stackedWidget.widget(index)
         if widget:
+            # The scrollable transcription page must fit the viewport even if a
+            # hidden sibling advertises a larger minimum height.
+            vertical = QSizePolicy.Ignored if widget is self.transcription_interface else QSizePolicy.Preferred
+            self.stackedWidget.setSizePolicy(QSizePolicy.Preferred, vertical)
+            self.stackedWidget.updateGeometry()
             self.pivot.setCurrentItem(widget.objectName())
 
     def closeEvent(self, event):

@@ -1,6 +1,7 @@
 import json
 import time
 import wave
+from copy import deepcopy
 from email.parser import BytesParser
 from email.utils import formatdate
 from unittest.mock import Mock
@@ -25,8 +26,13 @@ def audio_path(tmp_path):
         audio.setnchannels(1)
         audio.setsampwidth(2)
         audio.setframerate(16000)
-        audio.writeframes(b"\x00\x00" * 16000)
+        audio.writeframes(b"\x00\x00" * 16000 * 4)
     return path
+
+
+@pytest.fixture(autouse=True)
+def isolate_failure_reports(tmp_path, monkeypatch):
+    monkeypatch.setattr("videocaptioner.core.asr.qwen_filetrans_asr.LOG_PATH", tmp_path / "logs")
 
 
 def response(data=None, status=200):
@@ -515,3 +521,244 @@ def test_error_sanitizer_hides_enhancement_content(audio_path):
     message = asr._safe_error("secret-key 私密词条 vocab-private 私密会议背景 https://secret.url")
     assert "secret-key" not in message and "私密" not in message
     assert "vocab-private" not in message and "secret.url" not in message
+
+
+@pytest.mark.parametrize(
+    "begin,end", [(150, 140), (150, 150), (None, 200), (float("nan"), 200), (True, 200)]
+)
+def test_invalid_word_uses_complete_native_sentence(audio_path, caplog, begin, end):
+    sentence = {
+        "text": "Hello world.",
+        "begin_time": 100,
+        "end_time": 300,
+        "words": [
+            {"text": "Hello", "begin_time": 100, "end_time": 140},
+            {"text": "world", "punctuation": ".", "begin_time": begin, "end_time": end},
+        ],
+    }
+    following = {"text": "Next.", "begin_time": 400, "end_time": 500}
+    data = {"transcripts": [{"sentences": [sentence, following]}]}
+    segments = QwenFileTransASR(audio_path, "key", need_word_time_stamp=True)._make_segments(data)
+    assert [(s.text, s.start_time, s.end_time) for s in segments] == [
+        ("Hello world.", 100, 300),
+        ("Next.", 400, 500),
+    ]
+    assert "100" in caplog.text and "需复核" in caplog.text
+    assert "Hello" not in caplog.text
+
+
+@pytest.mark.parametrize("begin,end", [(100, 100), (200, 100), (None, 300)])
+def test_invalid_word_and_sentence_still_fail(audio_path, begin, end):
+    data = {
+        "transcripts": [
+            {
+                "sentences": [
+                    {
+                        "text": "Hello.",
+                        "begin_time": begin,
+                        "end_time": end,
+                        "words": [{"text": "Hello", "begin_time": 150, "end_time": 150}],
+                    }
+                ]
+            }
+        ]
+    }
+    with pytest.raises(RuntimeError, match="时间戳"):
+        QwenFileTransASR(audio_path, "key", need_word_time_stamp=True)._make_segments(data)
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "invalid",
+        [None],
+        [{}],
+        [{"text": 123}],
+        [{"text": "Hello", "begin_time": 1200, "end_time": 1800}],
+        [{"text": "Hello world.", "begin_time": -1, "end_time": 2900}],
+        [{"text": "Hello world.", "begin_time": 1100, "end_time": 2900}],
+        [{"text": "Hello world.", "begin_time": 1200, "end_time": 3000}],
+        [{"text": "Hello world.", "begin_time": 1200, "end_time": float("inf")}],
+        [{"text": "Hello world.", "begin_time": 1200, "end_time": 10**400}],
+        [{"text": "Hello world.", "begin_time": 1200.5, "end_time": 2900}],
+        [{"text": "Hello world.", "punctuation": None, "begin_time": 1200, "end_time": 2900}],
+        [{"text": "", "punctuation": ".", "begin_time": 0, "end_time": 0}],
+        [{"text": " ", "begin_time": 1200, "end_time": 2900}],
+        [
+            {"text": "world.", "begin_time": 2100, "end_time": 2900},
+            {"text": "Hello ", "begin_time": 1200, "end_time": 1800},
+        ],
+        [
+            {"text": "Hello ", "begin_time": 1200, "end_time": 2400},
+            {"text": "world.", "begin_time": 2100, "end_time": 2900},
+        ],
+    ],
+)
+def test_unreliable_words_recover_only_the_affected_sentence(audio_path, words):
+    data = deepcopy(TRANSCRIPT)
+    data["transcripts"][0]["sentences"][0]["words"] = words
+    original = deepcopy(data)
+    segments = QwenFileTransASR(audio_path, "key", need_word_time_stamp=True)._make_segments(data)
+    assert [(s.text, s.start_time, s.end_time) for s in segments] == [("Hello world.", 1200, 2900)]
+    assert segments[0].needs_review is True
+    assert segments[0].timing_source == "cloud_sentence"
+    assert data == original
+
+
+def test_invalid_sentence_can_use_complete_native_words_in_both_modes(audio_path):
+    data = deepcopy(TRANSCRIPT)
+    data["transcripts"][0]["sentences"][0]["end_time"] = None
+    for word_mode in (True, False):
+        segments = QwenFileTransASR(
+            audio_path, "key", need_word_time_stamp=word_mode
+        )._make_segments(data)
+        assert "".join(s.text for s in segments) == "Hello world."
+        assert segments[0].start_time == 1200 and segments[-1].end_time == 2900
+        if not word_mode:
+            assert len(segments) == 1 and segments[0].timing_source == "cloud_word_span"
+            assert segments[0].needs_review
+
+
+def test_incomplete_words_cannot_supply_missing_sentence_timing(audio_path):
+    data = deepcopy(TRANSCRIPT)
+    sentence = data["transcripts"][0]["sentences"][0]
+    sentence["end_time"] = None
+    sentence["words"].pop()
+    with pytest.raises(RuntimeError, match="可靠替代时间"):
+        QwenFileTransASR(audio_path, "key", need_word_time_stamp=True)._make_segments(data)
+
+
+@pytest.mark.parametrize("word_mode", [True, False])
+def test_timestamps_beyond_audio_cannot_be_exported(audio_path, word_mode):
+    asr = QwenFileTransASR(audio_path, "key", need_word_time_stamp=word_mode)
+    asr._audio_duration_ms = 2000
+    with pytest.raises(RuntimeError, match="时间戳"):
+        asr._make_segments(TRANSCRIPT)
+
+
+def test_complete_sentence_text_is_required_for_transcript(audio_path):
+    data = deepcopy(TRANSCRIPT)
+    data["transcripts"][0]["text"] += " Missing sentence."
+    with pytest.raises(RuntimeError, match="句子文本不完整"):
+        QwenFileTransASR(audio_path, "key")._make_segments(data)
+
+
+def test_failed_downloaded_response_is_replayable_without_credentials(
+    audio_path, monkeypatch, tmp_path
+):
+    bad = {
+        "file_url": "https://private.example/?signature=secret",
+        "transcripts": [{"text": "lost", "sentences": []}],
+    }
+    session = Session(happy_replies(bad))
+    monkeypatch.setattr(requests, "Session", lambda: session)
+    asr = QwenFileTransASR(audio_path, "secret-key", context="private-context")
+    monkeypatch.setattr(asr, "_wait", lambda _: None)
+    with pytest.raises(RuntimeError, match="原始结果已保存") as error:
+        asr.run()
+    reports = list((tmp_path / "logs" / "qwen-failures").glob("*.json"))
+    assert len(reports) == 1 and str(reports[0]) in str(error.value)
+    raw = reports[0].read_text(encoding="utf-8")
+    assert not any(
+        secret in raw
+        for secret in ["secret-key", "private-context", "private.example", "signature"]
+    )
+    report = json.loads(raw)
+    assert report["response"] == {"transcripts": bad["transcripts"]}
+    assert report["audio_duration_ms"] == 4000
+    assert len(session.calls) == 6
+
+
+def test_report_io_failure_preserves_original_error(audio_path, monkeypatch, tmp_path):
+    blocker = tmp_path / "not-a-directory"
+    blocker.write_text("blocked", encoding="utf-8")
+    monkeypatch.setattr("videocaptioner.core.asr.qwen_filetrans_asr.LOG_PATH", blocker)
+    with pytest.raises(RuntimeError, match="缺少 transcripts"):
+        QwenFileTransASR(audio_path, "key")._parse_result({})
+
+
+@pytest.mark.parametrize("data", [None, [], "invalid"])
+def test_non_object_result_is_rejected_with_clear_error(audio_path, data):
+    with pytest.raises(RuntimeError, match="无法识别"):
+        QwenFileTransASR(audio_path, "key")._make_segments(data)
+
+
+def test_sentence_replacement_preserves_both_neighbors_without_duplicates(audio_path):
+    data = deepcopy(TRANSCRIPT)
+    original = data["transcripts"][0]["sentences"][0]
+    sentences = []
+    for offset in (0, 3000, 6000):
+        s = deepcopy(original)
+        for item in [s, *s["words"]]:
+            item["begin_time"] += offset
+            item["end_time"] += offset
+        sentences.append(s)
+    data["transcripts"][0]["sentences"] = sentences
+    data["transcripts"][0]["text"] = "Hello world." * 3
+    sentences[1]["words"][-1]["end_time"] = sentences[1]["words"][-1]["begin_time"]
+    cues = QwenFileTransASR(audio_path, "key", need_word_time_stamp=True)._make_segments(data)
+    assert "".join(s.text for s in cues) == "Hello world." * 3
+    assert len(cues) == 5
+    assert [getattr(s, "needs_review", False) for s in cues] == [False, False, True, False, False]
+    assert all(a.end_time <= b.start_time for a, b in zip(cues, cues[1:]))
+
+
+def test_invalid_cached_result_is_preserved_without_resubmitting(audio_path, monkeypatch, tmp_path):
+    monkeypatch.setattr("videocaptioner.core.asr.qwen_filetrans_asr.is_cache_enabled", lambda: True)
+    network = Mock(side_effect=AssertionError("Unexpected network request"))
+    monkeypatch.setattr(requests, "Session", network)
+    asr = QwenFileTransASR(audio_path, "key", use_cache=True)
+    asr._cache = Mock()
+    asr._cache.get.return_value = {"transcripts": [{"text": "lost", "sentences": []}]}
+    with pytest.raises(RuntimeError, match="原始结果已保存"):
+        asr.run()
+    network.assert_not_called()
+    asr._cache.set.assert_not_called()
+    assert len(list((tmp_path / "logs" / "qwen-failures").glob("*.json"))) == 1
+
+
+def test_offline_replay_exports_saved_response_without_network(audio_path, monkeypatch, tmp_path):
+    from scripts.replay_qwen_filetrans import main
+
+    source = tmp_path / "saved.json"
+    source.write_text(
+        json.dumps({"format_version": 1, "audio_duration_ms": 4000, "response": TRANSCRIPT}),
+        encoding="utf-8",
+    )
+    output, summary = tmp_path / "result.srt", tmp_path / "summary.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        ["replay", "--response", str(source), "--srt", str(output), "--summary", str(summary)],
+    )
+    network = Mock(side_effect=AssertionError("Unexpected network request"))
+    monkeypatch.setattr(requests, "Session", network)
+    main()
+    network.assert_not_called()
+    report = json.loads(summary.read_text(encoding="utf-8"))
+    assert (
+        report["text_preserved"] and report["audio_duration_checked"] and report["nonoverlapping"]
+    )
+    assert report["subtitle_cues"] == 2
+    assert "Hello " in output.read_text(encoding="utf-8")
+    with pytest.raises(SystemExit):
+        main()
+
+
+def test_empty_sentence_cannot_hide_invalid_nonempty_word(audio_path):
+    data = {
+        "transcripts": [
+            {
+                "sentences": [
+                    {
+                        "text": "",
+                        "begin_time": 100,
+                        "end_time": 300,
+                        "words": [{"text": "lost", "begin_time": 200, "end_time": 200}],
+                    }
+                ]
+            }
+        ]
+    }
+    for word_mode in (True, False):
+        with pytest.raises(RuntimeError, match="文本为空"):
+            QwenFileTransASR(audio_path, "key", need_word_time_stamp=word_mode)._make_segments(data)

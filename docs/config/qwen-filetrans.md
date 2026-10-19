@@ -24,7 +24,15 @@ VideoCaptioner | 4
 
 基础地址须对应文件转录 REST API，支持 `/uploads`、`/services/audio/asr/transcription` 和 `/tasks/{task_id}`；OpenAI 兼容聊天地址不适用于此服务。使用自定义渠道时，渠道也须支持临时 OSS 上传。程序使用指定模型，不会自动切换模型。
 
-程序直接保留服务返回的毫秒时间戳。独立转录默认生成句子字幕；开启“词级时间戳”后使用服务返回的词时间戳，保留标点与空格。某个句子没有词级结果时保留该句的原生时间戳；有文本却缺少有效时间戳会报告错误。完整处理流程需要字幕断句时可自动使用词级结果。
+程序直接保留服务返回的毫秒时间戳。独立转录默认生成句子字幕；开启“词级时间戳”后使用服务返回的词时间戳，保留标点与空格。词时间须为有效的正时长区间，在已知音频和有效句子范围内，顺序正确且不重叠，词级文本须与完整句子对应。某句的词结果缺失或不可靠时，使用该句有效的云端句级时间，不会丢掉异常词或按字数估算时间；词结果异常导致的替代会在日志标明句子索引、时间范围及复核原因。句时间无效而完整词序列有效时，句子模式可使用该词序列的起止时间。完整处理流程需要字幕断句时可自动使用词级结果。
+
+当句、词两级都无法提供可靠时间，或声道文本与句子文本不完整对应时，程序仍会明确报错，不输出缺失内容的字幕。已下载的识别文本会保存到本地日志目录的 `qwen-failures` 文件夹，错误消息提供文件路径；该文件含识别文本，请按音频资料保管。保存内容不含请求密钥、增强选项或结果下载地址。排查时可在源码目录离线重放，无需重新提交云端识别：
+
+```powershell
+.venv\Scripts\python.exe scripts/replay_qwen_filetrans.py --response "失败结果.json" --srt "恢复字幕.srt" --summary "核查报告.json"
+```
+
+核查报告列出替代时间来源和需要复核的句子；如果数据仍无法可靠恢复，重放会报错。已有输出文件不会被覆盖。也可通过 `--audio "音频.wav"` 校验音频时长，或使用 `--sentence-mode` 导出句级字幕。
 
 单个音频须不超过 2 GB、12 小时，且不能超过当前上传凭证规定的文件大小。程序在上传前检查大小与时长，流式上传文件，不将整个长音频载入内存。读取非 WAV 音频时长和提取视频音轨需要 FFmpeg/ffprobe。
 
@@ -74,4 +82,4 @@ context = "录音讨论斯蒂格勒的第三持存。"
 
 `task_timeout` 以秒为单位，可用 `videocaptioner config set qwen_filetrans.task_timeout 3600` 增加等待时间。支持的语言提示包含中文、英语、日语、韩语等 30 种语言；界面只列出服务支持的语言提示。方言建议使用自动识别或中文提示。
 
-参考官方[准确率增强指南](https://platform.qianwenai.com/docs/developer-guides/speech/improve-recognition-accuracy)、[文件转录协议](https://platform.qianwenai.com/docs/developer-guides/speech/asr)、[临时上传接口](https://platform.qianwenai.com/docs/api-reference/more/upload-file-get-temporary-url)和[文件识别 HTTP 参数与结果格式](https://help.aliyun.com/zh/model-studio/fun-asr-recorded-speech-recognition-http-api)。文件转录使用 `input.context` 消息数组和 `parameters.vocabulary` 词到权重的映射；同步模型示例中的 `input.messages` 不适用于这里。当前验证覆盖模拟接口、实际 HTTP 请求序列化、参数边界、配置及缓存行为，以及完整转录界面的滚动、编辑与切换；尚未使用真实账户进行收费端到端转录。
+参考官方[准确率增强指南](https://platform.qianwenai.com/docs/developer-guides/speech/improve-recognition-accuracy)、[文件转录协议](https://platform.qianwenai.com/docs/developer-guides/speech/asr)、[临时上传接口](https://platform.qianwenai.com/docs/api-reference/more/upload-file-get-temporary-url)和[文件识别 HTTP 参数与结果格式](https://help.aliyun.com/zh/model-studio/fun-asr-recorded-speech-recognition-http-api)。文件转录使用 `input.context` 消息数组和 `parameters.vocabulary` 词到权重的映射；同步模型示例中的 `input.messages` 不适用于这里。当前验证覆盖模拟接口、实际 HTTP 请求序列化、参数边界、配置及缓存行为，以及完整转录界面的滚动、编辑与切换。2026 年 10 月已用一段约 66 分钟的日语音频完成真实云端识别，并离线重放其 428 句结果；两处异常词时间戳使用云端句级时间，导出 2,213 条字幕。该案例验证了这份实际返回数据的恢复，不代表所有语言或所有服务端异常均已覆盖。

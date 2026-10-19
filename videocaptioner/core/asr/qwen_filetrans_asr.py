@@ -12,6 +12,7 @@ import re
 import subprocess
 import threading
 import time
+import unicodedata
 import uuid
 import wave
 from email.utils import parsedate_to_datetime
@@ -20,13 +21,37 @@ from urllib.parse import quote, urlsplit
 
 import requests
 
+from videocaptioner.config import LOG_PATH
 from videocaptioner.core.utils.cache import get_asr_cache, is_cache_enabled
+from videocaptioner.core.utils.logger import setup_logger
 
 from .asr_data import ASRData, ASRDataSeg
 from .base import BaseASR
 
 DEFAULT_BASE_URL = "https://maas.qianwenaiapi.com/api/v1"
 DEFAULT_MODEL = "qwen-audio-3.1-asr-flash-filetrans"
+logger = setup_logger("qwen_filetrans_asr")
+
+
+def _valid_timestamp(item, duration_ms=None):
+    begin, end = item.get("begin_time"), item.get("end_time")
+    return (
+        all(
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and (isinstance(value, int) or math.isfinite(value))
+            and value == int(value)
+            for value in (begin, end)
+        )
+        and 0 <= begin < end
+        and (duration_ms is None or end <= duration_ms)
+    )
+
+
+def _comparable_text(text):
+    return "".join(unicodedata.normalize("NFKC", text).split())
+
+
 SUPPORTED_LANGUAGE_HINTS = frozenset(
     "zh en ja ko vi th id ms tl hi ar fr de es pt ru it nl sv da fi no el pl cs hu ro bg hr sk".split()
 )
@@ -180,6 +205,7 @@ class QwenFileTransASR(BaseASR):
         self._cancelled = threading.Event()
         self._cache = get_asr_cache()
         self._deadline = None
+        self._audio_duration_ms = None
 
     def cancel(self):
         self._cancelled.set()
@@ -409,6 +435,7 @@ class QwenFileTransASR(BaseASR):
             raise ValueError("无法读取音频时长，请确认音频有效，且已安装 FFmpeg/ffprobe") from None
         if duration > 12 * 3600:
             raise ValueError("Qwen 云端 ASR 的单个音频不能超过 12 小时")
+        self._audio_duration_ms = math.ceil(duration * 1000)
         self._check_cancel()
 
     def run(self, callback=None, **kwargs):
@@ -424,19 +451,137 @@ class QwenFileTransASR(BaseASR):
         if cache_allowed:
             cached = self._cache.get(cache_key, default=None)
             if cached is not None:
-                segments = self._make_segments(cached)
+                segments = self._parse_result(cached)
                 self._check_cancel()
                 return ASRData(segments)
         # A session has no global bearer header: credentials never go to OSS or result URLs.
         with requests.Session() as session:
             data = self._run(callback, session=session)
-        segments = self._make_segments(data)
+        segments = self._parse_result(data)
         self._check_cancel()
         if cache_allowed:
             self._cache.set(cache_key, data, expire=86400 * 2)
         if callback:
             callback(100, "Qwen 转录完成")
         return ASRData(segments)
+
+    def _parse_result(self, data):
+        try:
+            return self._make_segments(data)
+        except RuntimeError as error:
+            # Persist the downloaded response before the temporary audio is
+            # removed. It contains recognition output, never request headers,
+            # upload credentials, context options, or signed download URLs.
+            directory = LOG_PATH / "qwen-failures"
+            path = directory / f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}.json"
+            try:
+                directory.mkdir(parents=True, exist_ok=True)
+                with path.open("x", encoding="utf-8") as stream:
+                    json.dump(
+                        {
+                            "format_version": 1,
+                            "model": self.model,
+                            "language": self.language,
+                            "word_timestamps": self.need_word_time_stamp,
+                            "audio_duration_ms": self._audio_duration_ms,
+                            "response": (
+                                {key: data[key] for key in ("text", "transcripts") if key in data}
+                                if isinstance(data, dict)
+                                else {"invalid_response_type": type(data).__name__}
+                            ),
+                        },
+                        stream,
+                        ensure_ascii=False,
+                        indent=2,
+                    )
+            except (OSError, TypeError, ValueError):
+                logger.warning("Qwen 失败结果无法保存到本地；原始错误：%s", error)
+                raise error from None
+            logger.error("Qwen 时间戳校验失败，原始转录结果已保存：%s", path)
+            raise RuntimeError(f"{error}。原始结果已保存，可离线排查：{path}") from None
+
+    def _sentence_segments(self, sentence, source_index):
+        text = sentence.get("text")
+        if not isinstance(text, str):
+            raise RuntimeError(f"Qwen 句子 {source_index} 缺少有效的文本")
+        sentence_valid = _valid_timestamp(sentence, self._audio_duration_ms)
+        words = sentence.get("words")
+        word_segments = []
+        reason = None
+        if not isinstance(words, list) or not words:
+            reason = "缺少有效的词级结果"
+        else:
+            for item in words:
+                if not isinstance(item, dict) or not isinstance(item.get("text"), str):
+                    reason = "词级文本格式错误"
+                    break
+                punctuation = item.get("punctuation", "")
+                if not isinstance(punctuation, str):
+                    reason = "词级标点格式错误"
+                    break
+                word_text = item["text"] + punctuation
+                if not word_text.strip():
+                    continue
+                if not _valid_timestamp(item, self._audio_duration_ms):
+                    reason = "词时间戳无效或超出音频范围"
+                    break
+                begin, end = int(item["begin_time"]), int(item["end_time"])
+                if (
+                    sentence_valid
+                    and not sentence["begin_time"] <= begin < end <= sentence["end_time"]
+                ):
+                    reason = "词时间戳超出句子范围"
+                    break
+                if word_segments and begin < word_segments[-1].end_time:
+                    reason = "词时间戳重叠或顺序错误"
+                    break
+                word_segments.append(ASRDataSeg(word_text, begin, end))
+            if reason is None:
+                if not word_segments:
+                    reason = "词级结果为空"
+                elif text.strip() and _comparable_text(text) != _comparable_text(
+                    "".join(segment.text for segment in word_segments)
+                ):
+                    reason = "词级文本与句子文本不完整对应"
+
+        if self.need_word_time_stamp and reason is None:
+            return word_segments
+        if sentence_valid:
+            if not text.strip():
+                if word_segments or (words and reason != "词级结果为空"):
+                    raise RuntimeError(f"Qwen 句子 {source_index} 文本为空但词级结果非空")
+                return []
+            cue = ASRDataSeg(text, int(sentence["begin_time"]), int(sentence["end_time"]))
+            if self.need_word_time_stamp and words is not None and words != []:
+                self._mark_review(cue, source_index, "cloud_sentence", reason)
+            return [cue]
+        if not self.need_word_time_stamp and reason is None and text.strip():
+            # Both boundaries are measured word times; no interpolation.
+            cue = ASRDataSeg(text, word_segments[0].start_time, word_segments[-1].end_time)
+            self._mark_review(
+                cue, source_index, "cloud_word_span", "句时间戳无效，使用完整词序列的起止时间"
+            )
+            return [cue]
+        if not text.strip() and not words:
+            return []
+        raise RuntimeError(
+            f"Qwen 句子 {source_index} 包含无效或缺失的时间戳，且无可靠替代时间（{reason or '句时间戳无效'}）"
+        )
+
+    @staticmethod
+    def _mark_review(cue, source_index, timing_source, reason):
+        cue.timing_source = timing_source
+        cue.needs_review = True
+        cue.source_segment_index = source_index
+        cue.timing_review_reason = reason
+        logger.warning(
+            "Qwen 句子 %s [%d–%d ms]：%s；使用%s，需复核",
+            source_index,
+            cue.start_time,
+            cue.end_time,
+            reason,
+            "云端句级时间戳" if timing_source == "cloud_sentence" else "云端词序列起止时间",
+        )
 
     def _run(self, callback=None, session=None, **kwargs):
         notify = callback or (lambda *_: None)
@@ -513,6 +658,8 @@ class QwenFileTransASR(BaseASR):
         return data
 
     def _make_segments(self, resp_data):
+        if not isinstance(resp_data, dict):
+            raise RuntimeError("Qwen 返回了无法识别的转录结果")
         transcripts = resp_data.get("transcripts")
         if not isinstance(transcripts, list):
             raise RuntimeError("Qwen 结果缺少 transcripts")
@@ -522,7 +669,7 @@ class QwenFileTransASR(BaseASR):
         if not transcripts and top_text.strip():
             raise RuntimeError("Qwen 结果有文本但缺少句子时间戳")
         segments = []
-        for transcript in transcripts:
+        for transcript_index, transcript in enumerate(transcripts, 1):
             if not isinstance(transcript, dict):
                 raise RuntimeError("Qwen transcripts 格式错误")
             sentences = transcript.get("sentences")
@@ -533,44 +680,20 @@ class QwenFileTransASR(BaseASR):
                 raise RuntimeError("Qwen 转录文本格式错误")
             if not sentences and transcript_text.strip():
                 raise RuntimeError("Qwen 结果有文本但缺少句子时间戳")
-            for sentence in sentences:
+            if (
+                transcript_text.strip()
+                and all(
+                    isinstance(sentence, dict) and isinstance(sentence.get("text"), str)
+                    for sentence in sentences
+                )
+                and _comparable_text(transcript_text)
+                != _comparable_text("".join(sentence["text"] for sentence in sentences))
+            ):
+                raise RuntimeError(f"Qwen 声道 {transcript_index} 的句子文本不完整")
+            for sentence_index, sentence in enumerate(sentences, 1):
                 if not isinstance(sentence, dict):
                     raise RuntimeError("Qwen 句子格式错误")
-                sentence_text = sentence.get("text")
-                if not isinstance(sentence_text, str):
-                    raise RuntimeError("Qwen 句子缺少有效的文本")
-                items = sentence.get("words") if self.need_word_time_stamp else None
-                # Some languages/results expose sentence timing only; preserve that native timing.
-                if items is None or items == []:
-                    items = [sentence]
-                if not isinstance(items, list):
-                    raise RuntimeError("Qwen 词时间戳格式错误")
-                segment_count = len(segments)
-                for item in items:
-                    if not isinstance(item, dict):
-                        raise RuntimeError("Qwen 时间戳条目格式错误")
-                    text = item.get("text")
-                    if not isinstance(text, str):
-                        raise RuntimeError("Qwen 转录文本格式错误")
-                    punctuation = item.get("punctuation", "")
-                    text = text + (punctuation if isinstance(punctuation, str) else "")
-                    if not text.strip():
-                        continue
-                    begin, end = item.get("begin_time"), item.get("end_time")
-                    if (
-                        isinstance(begin, bool)
-                        or isinstance(end, bool)
-                        or not isinstance(begin, (int, float))
-                        or not isinstance(end, (int, float))
-                        or not math.isfinite(begin)
-                        or not math.isfinite(end)
-                        or begin < 0
-                        or end <= begin
-                        or begin != int(begin)
-                        or end != int(end)
-                    ):
-                        raise RuntimeError("Qwen 结果包含无效或缺失的时间戳")
-                    segments.append(ASRDataSeg(text=text, start_time=int(begin), end_time=int(end)))
-                if sentence_text.strip() and len(segments) == segment_count:
-                    raise RuntimeError("Qwen 句子有文本但词级结果为空")
+                segments.extend(
+                    self._sentence_segments(sentence, f"{transcript_index}.{sentence_index}")
+                )
         return segments
